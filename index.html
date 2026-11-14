@@ -1,0 +1,1942 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AstroQuiz | Team Astral Express - 2026 NASA Space Apps</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Three.js for Interactive 3D Planetary Globe -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <!-- Google Fonts & KK-Milky Tea font import -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;700&family=Space+Grotesk:wght@600;700&display=swap" rel="stylesheet">
+    <style>
+        @import url('https://fonts.cdnfonts.com/css/kk-milky-tea');
+        @import url('https://fonts.googleapis.com/css2?family=Comic+Neue:wght@300;400;700&display=swap');
+    </style>
+    
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        nasa: {
+                            blue: '#0B3D91',
+                            bright: '#105BD8',
+                            glow: '#3B82F6',
+                            red: '#FC3D21',
+                            black: '#000000',
+                            void: '#03060D',
+                            panel: 'rgba(6, 14, 30, 0.78)'
+                        }
+                    },
+                    fontFamily: {
+                        sans: ['KK-Milky Tea', 'Inter', 'sans-serif'],
+                        display: ['KK-Milky Tea', 'Space Grotesk', 'sans-serif'],
+                        mono: ['JetBrains Mono', 'monospace'],
+                    }
+                }
+            }
+        }
+    </script>
+
+    <style>
+        * {
+            box-sizing: border-box;
+            user-select: none;
+            -webkit-user-select: none;
+            font-family: 'KK-Milky Tea', 'Comic Neue', 'Comic Sans MS', cursive !important;
+        }
+
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background-color: #000000;
+            color: #FFFFFF;
+        }
+
+        /* Subtle NASA Blue Grid Overlay */
+        .bg-grid-pattern {
+            background-image: 
+                linear-gradient(to right, rgba(11, 61, 145, 0.14) 1px, transparent 1px),
+                linear-gradient(to bottom, rgba(11, 61, 145, 0.14) 1px, transparent 1px);
+            background-size: 48px 48px;
+        }
+
+        /* Pulsing Red Rover Marker Ring */
+        @keyframes pulseRing {
+            0% {
+                transform: translate(-50%, -50%) scale(0.7);
+                opacity: 0.95;
+            }
+            70% {
+                transform: translate(-50%, -50%) scale(2.3);
+                opacity: 0;
+            }
+            100% {
+                transform: translate(-50%, -50%) scale(2.3);
+                opacity: 0;
+            }
+        }
+
+        .marker-pulse {
+            animation: pulseRing 2.2s cubic-bezier(0.215, 0.61, 0.355, 1) infinite;
+        }
+
+        /* HUD Corner Brackets */
+        .hud-bracket {
+            position: relative;
+        }
+        .hud-bracket::before,
+        .hud-bracket::after {
+            content: '';
+            position: absolute;
+            width: 12px;
+            height: 12px;
+            border-color: #105BD8;
+            border-style: solid;
+            pointer-events: none;
+        }
+        .hud-bracket::before {
+            top: -1px;
+            left: -1px;
+            border-width: 2px 0 0 2px;
+            border-top-left-radius: 6px;
+        }
+        .hud-bracket::after {
+            bottom: -1px;
+            right: -1px;
+            border-width: 0 2px 2px 0;
+            border-bottom-right-radius: 6px;
+        }
+
+        /* Canvas Cursor */
+        #globe-container {
+            cursor: grab;
+        }
+        #globe-container:active {
+            cursor: grabbing;
+        }
+
+        /* Smooth Fade Transitions */
+        .marker-pin {
+            transition: opacity 0.25s ease, transform 0.2s ease;
+        }
+        .marker-pin:hover {
+            z-index: 40;
+        }
+
+        /* Custom Scrollbar for Mission Briefing & Quiz Modal */
+        .nasa-scroll::-webkit-scrollbar {
+            width: 6px;
+        }
+        .nasa-scroll::-webkit-scrollbar-track {
+            background: rgba(3, 6, 13, 0.8);
+            border-radius: 4px;
+        }
+        .nasa-scroll::-webkit-scrollbar-thumb {
+            background: #0B3D91;
+            border-radius: 4px;
+        }
+        .nasa-scroll::-webkit-scrollbar-thumb:hover {
+            background: #105BD8;
+        }
+
+
+        /* Twinkling background stars and shooting-star effects */
+        #sky-effects {
+            position: fixed;
+            inset: 0;
+            /* Keep all decorative stars behind the 3D globe so they never
+               appear painted across the planet's surface. */
+            z-index: 5;
+            overflow: hidden;
+            pointer-events: none;
+        }
+        .twinkle-star {
+            position: absolute;
+            display: block;
+            width: var(--star-size, 2px);
+            height: var(--star-size, 2px);
+            border-radius: 50%;
+            background: #fff;
+            opacity: 0.25;
+            box-shadow: 0 0 5px 1px rgba(190, 220, 255, 0.55);
+            animation: starTwinkle var(--twinkle-duration, 3s) ease-in-out var(--twinkle-delay, 0s) infinite;
+            will-change: opacity, transform;
+        }
+        @keyframes starTwinkle {
+            0%, 100% { opacity: 0.18; transform: scale(0.75); }
+            50% { opacity: 1; transform: scale(1.7); }
+        }
+        .shooting-star {
+            position: absolute;
+            width: 150px;
+            height: 2px;
+            border-radius: 999px;
+            opacity: 0;
+            transform: rotate(-35deg);
+            transform-origin: right center;
+            /* Bright leading point at the left; faint tail trails to the right. */
+            background: linear-gradient(90deg, rgba(235, 247, 255, 1), rgba(150, 205, 255, 0.42) 35%, transparent 100%);
+            filter: drop-shadow(0 0 5px rgba(130, 190, 255, 0.9));
+            animation: shootingStarFlight 1.35s ease-out forwards;
+        }
+        .shooting-star::after {
+            content: '';
+            position: absolute;
+            left: -2px;
+            top: -2px;
+            width: 5px;
+            height: 5px;
+            border-radius: 50%;
+            background: #fff;
+            box-shadow: 0 0 9px 3px rgba(170, 215, 255, 0.9);
+        }
+        @keyframes shootingStarFlight {
+            /* Travel from upper-right toward lower-left, with the bright head leading. */
+            0% { opacity: 0; transform: translate3d(0, 0, 0) rotate(-35deg) scaleX(0.35); }
+            12% { opacity: 1; }
+            75% { opacity: 0.9; }
+            100% { opacity: 0; transform: translate3d(-58vw, 48vh, 0) rotate(-35deg) scaleX(1.15); }
+        }
+        @media (prefers-reduced-motion: reduce) {
+            .twinkle-star { animation: none; opacity: 0.65; }
+            .shooting-star { animation-duration: 0.01ms; }
+        }
+    </style>
+</head>
+<body class="bg-black text-white font-sans antialiased relative selection:bg-nasa-blue selection:text-white">
+
+    <!-- Deep Space Radial Glow & Grid Backdrop -->
+    <div class="fixed inset-0 pointer-events-none z-0 bg-[radial-gradient(circle_at_center,rgba(11,61,145,0.22)_0%,rgba(2,5,12,0.95)_62%,#000000_100%)]"></div>
+    <div class="fixed inset-0 pointer-events-none z-0 bg-grid-pattern opacity-60"></div>
+
+    <!-- Interactive 3D Globe Canvas Container -->
+    <div id="globe-container" class="fixed inset-0 z-10 w-full h-full"></div>
+    <!-- Decorative sky layer: twinkling stars and occasional shooting stars -->
+    <div id="sky-effects" aria-hidden="true"></div>
+
+    <!-- Dynamic 2D Overlay Layer for Projected 3D Rover Pins -->
+    <div id="markers-layer" class="fixed inset-0 z-20 pointer-events-none overflow-hidden"></div>
+
+    <!-- Top Header: Team Astral Express & AstroQuiz Branding -->
+    <header class="fixed top-0 left-0 right-0 z-30 pointer-events-none px-4 sm:px-8 pt-4 sm:pt-6">
+        <div class="max-w-7xl mx-auto flex flex-col md:flex-row md:items-start md:justify-between gap-4">
+            
+            <!-- Left: Team Name & Main Title -->
+            <div class="pointer-events-auto inline-flex flex-col items-start">
+                <!-- Team Badge -->
+                <div class="inline-flex items-center gap-2.5 px-3.5 py-1.5 rounded-full bg-nasa-blue/40 border border-nasa-bright/60 backdrop-blur-md shadow-[0_0_20px_rgba(16,91,216,0.35)] mb-2.5">
+                    <span class="w-2 h-2 rounded-full bg-nasa-red animate-pulse"></span>
+                    <span class="font-mono text-xs sm:text-sm font-bold tracking-widest uppercase text-blue-100">
+                        TEAM ASTRAL EXPRESS
+                    </span>
+                </div>
+
+                <!-- Website Title -->
+                <div class="flex items-baseline gap-3">
+                    <h1 class="font-display text-4xl sm:text-5xl md:text-6xl font-bold tracking-tight text-white drop-shadow-[0_2px_18px_rgba(16,91,216,0.6)]">
+                        Astro<span class="text-nasa-bright">Quiz</span>
+                    </h1>
+                    <span class="hidden sm:inline-block font-mono text-xs px-2 py-0.5 rounded bg-nasa-blue/30 border border-nasa-blue text-blue-300">
+                        2026 NASA SPACE APPS
+                    </span>
+                </div>
+
+                <!-- Challenge Subtitle -->
+                <p class="mt-1.5 text-xs sm:text-sm text-blue-200/80 max-w-md leading-relaxed">
+                    Abandoned but not Forgotten: NASA's Discarded Hardware on the Moon &amp; Mars
+                </p>
+            </div>
+
+            <!-- Right: Celestial Body Switcher (Mars vs Moon) & Master Timeline/Score -->
+            <div class="pointer-events-auto self-start md:self-center flex flex-wrap items-center gap-2.5">
+                <!-- Master Timeline & Score Button -->
+                <button 
+                    onclick="openGlobalOverviewModal('timeline')"
+                    class="hud-bracket flex items-center gap-2 px-3.5 py-2.5 rounded-xl bg-nasa-panel hover:bg-nasa-blue/50 backdrop-blur-xl border border-nasa-blue/70 text-xs font-mono font-semibold text-blue-100 transition-all shadow-[0_0_20px_rgba(11,61,145,0.35)]"
+                >
+                    <svg class="w-4 h-4 text-nasa-bright" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                    </svg>
+                    <span>TIMELINE</span>
+                </button>
+
+                <!-- Quiz Score & Citations Pill -->
+                <button 
+                    onclick="openGlobalOverviewModal('citations')"
+                    class="hud-bracket flex items-center gap-2 px-3.5 py-2.5 rounded-xl bg-nasa-panel hover:bg-nasa-blue/50 backdrop-blur-xl border border-nasa-blue/70 text-xs font-mono font-semibold text-blue-100 transition-all shadow-[0_0_20px_rgba(11,61,145,0.35)]"
+                >
+                    <span class="w-2 h-2 rounded-full bg-emerald-400"></span>
+                    <span>SCORE: <span id="global-score-badge" class="text-white font-bold">0/24</span></span>
+                </button>
+
+                <!-- Mars / Moon Switcher -->
+                <div class="hud-bracket bg-nasa-panel backdrop-blur-xl border border-nasa-blue/70 rounded-xl p-1.5 shadow-[0_0_30px_rgba(11,61,145,0.4)]">
+                    <div class="flex items-center gap-1" role="tablist" aria-label="Celestial Body Selector">
+                        <!-- Mars Button -->
+                        <button 
+                            id="btn-mars" 
+                            onclick="switchPlanet('mars')"
+                            class="relative flex items-center gap-2.5 px-4 sm:px-5 py-2 rounded-lg font-display font-semibold text-sm tracking-wide transition-all duration-300 bg-nasa-blue text-white shadow-[0_0_16px_rgba(16,91,216,0.65)] border border-nasa-bright"
+                        >
+                            <span class="w-2.5 h-2.5 rounded-full bg-nasa-red shadow-[0_0_8px_#FC3D21]"></span>
+                            <span>MARS</span>
+                        </button>
+
+                        <!-- Moon Button -->
+                        <button 
+                            id="btn-moon" 
+                            onclick="switchPlanet('moon')"
+                            class="relative flex items-center gap-2.5 px-4 sm:px-5 py-2 rounded-lg font-display font-semibold text-sm tracking-wide transition-all duration-300 text-blue-300/75 hover:text-white hover:bg-nasa-blue/25 border border-transparent"
+                        >
+                            <span class="w-2.5 h-2.5 rounded-full bg-slate-300"></span>
+                            <span>MOON</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </header>
+
+    <!-- Bottom Mission Control Bar (Telemetry & Orbit Controls) -->
+    <footer class="fixed bottom-0 left-0 right-0 z-30 pointer-events-none px-4 sm:px-8 pb-4 sm:pb-6">
+        <div class="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-3">
+            
+            <!-- Active Body & Rover Telemetry Pill -->
+            <div class="pointer-events-auto hud-bracket bg-nasa-panel backdrop-blur-xl border border-nasa-blue/60 rounded-xl px-4 py-2.5 flex items-center gap-4 text-xs font-mono">
+                <div class="flex items-center gap-2">
+                    <span class="text-blue-400">TARGET:</span>
+                    <span id="hud-planet-name" class="font-bold text-white tracking-wider">MARS</span>
+                </div>
+                <span class="text-nasa-blue">|</span>
+                <div class="flex items-center gap-2">
+                    <span class="w-2 h-2 rounded-full bg-nasa-red"></span>
+                    <span id="hud-rover-count" class="text-blue-100">3 SITES MAPPED (SPIRIT, OPPORTUNITY, PATHFINDER)</span>
+                </div>
+            </div>
+
+            <!-- Interactive Globe Controls -->
+            <div class="pointer-events-auto flex items-center gap-2 bg-nasa-panel backdrop-blur-xl border border-nasa-blue/60 rounded-xl p-1.5">
+                <button 
+                    id="btn-toggle-orbit" 
+                    onclick="toggleAutoRotate()"
+                    class="flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-mono font-medium bg-nasa-blue/40 hover:bg-nasa-blue/70 text-blue-100 border border-nasa-bright/40 transition-colors"
+                    title="Pause or Resume Planetary Orbit"
+                >
+                    <svg id="icon-pause" class="w-3.5 h-3.5 text-nasa-bright" fill="currentColor" viewBox="0 0 24 24">
+                        <rect x="6" y="4" width="4" height="16" rx="1"></rect>
+                        <rect x="14" y="4" width="4" height="16" rx="1"></rect>
+                    </svg>
+                    <svg id="icon-play" class="w-3.5 h-3.5 text-nasa-red hidden" fill="currentColor" viewBox="0 0 24 24">
+                        <polygon points="5 3 19 12 5 21 5 3"></polygon>
+                    </svg>
+                    <span id="orbit-status-text">ORBIT: ACTIVE</span>
+                </button>
+
+                <button 
+                    onclick="resetCameraView()"
+                    class="px-3.5 py-2 rounded-lg text-xs font-mono font-medium text-blue-300 hover:text-white hover:bg-nasa-blue/40 transition-colors"
+                    title="Reset Globe Orientation"
+                >
+                    RESET VIEW
+                </button>
+            </div>
+
+        </div>
+    </footer>
+
+    <!-- Interactive Hardware Story, Timeline & Multiple-Choice Quiz Modal -->
+    <div id="rover-modal" class="fixed inset-0 z-50 hidden items-center justify-center p-3 sm:p-5 bg-black/80 backdrop-blur-md transition-opacity duration-200">
+        <div class="hud-bracket relative w-full max-w-3xl max-h-[90vh] flex flex-col bg-[#040A17] border border-nasa-bright/80 rounded-2xl shadow-[0_0_60px_rgba(16,91,216,0.5)] overflow-hidden">
+            
+            <!-- Modal Header -->
+            <div class="p-4 sm:p-6 pb-3 border-b border-nasa-blue/50 bg-[#050D1E] shrink-0">
+                <div class="flex items-start justify-between gap-4">
+                    <div>
+                        <div class="inline-flex items-center gap-2 px-2.5 py-1 rounded-md bg-nasa-red/15 border border-nasa-red/50 mb-2">
+                            <span class="w-2 h-2 rounded-full bg-nasa-red animate-ping"></span>
+                            <span id="modal-planet-badge" class="font-mono text-[11px] font-bold uppercase tracking-wider text-nasa-red">
+                                MARS SURFACE NODE
+                            </span>
+                        </div>
+                        <h2 id="modal-rover-name" class="font-display text-2xl sm:text-3xl font-bold text-white tracking-tight">
+                            Spirit Rover
+                        </h2>
+                        <p id="modal-rover-coords" class="font-mono text-xs text-blue-300 mt-1">
+                            LANDING SITE: Gusev Crater (14.57° S, 175.47° E)
+                        </p>
+                    </div>
+
+                    <button 
+                        onclick="closeRoverModal()" 
+                        class="p-2 rounded-xl text-blue-300 hover:text-white hover:bg-nasa-blue/50 border border-transparent hover:border-nasa-bright/40 transition-colors"
+                        aria-label="Close"
+                    >
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"></path>
+                        </svg>
+                    </button>
+                </div>
+
+                <!-- Navigation Tabs inside Hardware Modal -->
+                <div class="flex flex-wrap items-center gap-1.5 mt-4 pt-3 border-t border-nasa-blue/30">
+                    <button id="tab-btn-story" onclick="switchModalTab('story')" class="px-3.5 py-2 rounded-lg font-mono text-xs font-bold tracking-wide bg-nasa-blue text-white border border-nasa-bright transition-all">
+                        01. MISSION STORY
+                    </button>
+                    <button id="tab-btn-timeline" onclick="switchModalTab('timeline')" class="px-3.5 py-2 rounded-lg font-mono text-xs font-bold tracking-wide text-blue-300 hover:text-white hover:bg-nasa-blue/30 border border-transparent transition-all">
+                        02. TIMELINE
+                    </button>
+                    <button id="tab-btn-quiz" onclick="switchModalTab('quiz')" class="px-3.5 py-2 rounded-lg font-mono text-xs font-bold tracking-wide text-blue-300 hover:text-white hover:bg-nasa-blue/30 border border-transparent transition-all flex items-center gap-2">
+                        <span>03. ASTROQUIZ</span>
+                        <span id="modal-quiz-pill" class="px-1.5 py-0.5 text-[10px] rounded bg-nasa-red/20 text-nasa-red border border-nasa-red/40">0/4</span>
+                    </button>
+                    <button id="tab-btn-citations" onclick="switchModalTab('citations')" class="px-3.5 py-2 rounded-lg font-mono text-xs font-bold tracking-wide text-blue-300 hover:text-white hover:bg-nasa-blue/30 border border-transparent transition-all">
+                        04. NASA CITATIONS
+                    </button>
+                </div>
+            </div>
+
+            <!-- Scrollable Modal Body -->
+            <div id="modal-body-content" class="p-4 sm:p-6 overflow-y-auto nasa-scroll flex-1 space-y-5 text-sm text-blue-100/90 leading-relaxed">
+                <!-- Dynamic Content Injected Here -->
+            </div>
+
+            <!-- Modal Footer -->
+            <div class="px-4 sm:px-6 py-3.5 border-t border-nasa-blue/50 bg-[#050D1E] flex items-center justify-between gap-3 shrink-0">
+                <span class="font-mono text-[11px] text-blue-400">
+                    OFFICIAL NASA DATA ONLY • TEAM ASTRAL EXPRESS
+                </span>
+                <button 
+                    onclick="closeRoverModal()"
+                    class="px-5 py-2 rounded-xl bg-nasa-blue hover:bg-nasa-bright text-white font-display font-semibold text-xs sm:text-sm tracking-wide transition-colors shadow-[0_0_15px_rgba(16,91,216,0.5)]"
+                >
+                    Return to Globe
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Global Mission Timeline & Master Citations Modal -->
+    <div id="global-modal" class="fixed inset-0 z-50 hidden items-center justify-center p-3 sm:p-5 bg-black/80 backdrop-blur-md">
+        <div class="hud-bracket relative w-full max-w-3xl max-h-[88vh] flex flex-col bg-[#040A17] border border-nasa-bright/80 rounded-2xl shadow-[0_0_60px_rgba(16,91,216,0.5)] overflow-hidden">
+            <div class="p-4 sm:p-6 pb-3 border-b border-nasa-blue/50 bg-[#050D1E] flex items-center justify-between">
+                <div>
+                    <span class="font-mono text-[11px] font-bold uppercase tracking-widest text-nasa-bright">
+                        TEAM ASTRAL EXPRESS • ARCHIVE
+                    </span>
+                    <h2 id="global-modal-title" class="font-display text-2xl font-bold text-white mt-0.5">
+                        Chronological Timeline
+                    </h2>
+                </div>
+                <button onclick="closeGlobalOverviewModal()" class="p-2 rounded-xl text-blue-300 hover:text-white hover:bg-nasa-blue/50 transition-colors">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"></path>
+                    </svg>
+                </button>
+            </div>
+
+            <div class="px-4 sm:px-6 pt-3 bg-[#050D1E] border-b border-nasa-blue/40 flex gap-2 pb-3">
+                <button id="global-tab-timeline" onclick="renderGlobalOverviewContent('timeline')" class="px-3.5 py-1.5 rounded-lg font-mono text-xs font-bold bg-nasa-blue text-white border border-nasa-bright">
+                    MASTER TIMELINE (1969–2019)
+                </button>
+                <button id="global-tab-citations" onclick="renderGlobalOverviewContent('citations')" class="px-3.5 py-1.5 rounded-lg font-mono text-xs font-bold text-blue-300 hover:text-white hover:bg-nasa-blue/30">
+                    OFFICIAL NASA CITATIONS &amp; SCORE
+                </button>
+            </div>
+
+            <div id="global-modal-body" class="p-4 sm:p-6 overflow-y-auto nasa-scroll flex-1 space-y-4">
+                <!-- Populated dynamically -->
+            </div>
+        </div>
+    </div>
+
+    <script>
+        /**
+         * AstroQuiz - Interactive Rover Map Website
+         * Team: Astral Express
+         * Challenge: 2026 NASA Space Apps - Abandoned but not Forgotten
+         * Sources: Official NASA Mission Archives Only (science.nasa.gov, nssdc.gsfc.nasa.gov, jpl.nasa.gov, nasa.gov)
+         */
+
+        // ==========================================
+        // 1. OFFICIAL NASA CITATIONS REGISTRY
+        // ==========================================
+        const NASA_CITATIONS = [
+            {
+                id: 'CIT-1',
+                title: 'NASA Science: Mars Exploration Rovers — Spirit and Opportunity Overview',
+                url: 'https://science.nasa.gov/mission/mars-exploration-rovers-spirit-and-opportunity/',
+                agency: 'NASA Science Mission Directorate'
+            },
+            {
+                id: 'CIT-2',
+                title: 'NASA JPL Photojournal: PIA07997 (Spirit Sunset at Gusev Crater) & PIA22073 (Opportunity at Perseverance Valley)',
+                url: 'https://photojournal.jpl.nasa.gov/catalog/PIA07997',
+                agency: 'NASA Jet Propulsion Laboratory (JPL)'
+            },
+            {
+                id: 'CIT-3',
+                title: 'NASA Science: Mars Pathfinder & Sojourner Rover Mission Overview',
+                url: 'https://science.nasa.gov/mission/mars-pathfinder/',
+                agency: 'NASA Science Mission Directorate'
+            },
+            {
+                id: 'CIT-4',
+                title: 'NASA JPL Photojournal: PIA01120 — Sojourner Rover and Mars Pathfinder Lander at Ares Vallis',
+                url: 'https://photojournal.jpl.nasa.gov/catalog/PIA01120',
+                agency: 'NASA Jet Propulsion Laboratory (JPL)'
+            },
+            {
+                id: 'CIT-5',
+                title: 'NASA Space Science Data Coordinated Archive (NSSDCA): Apollo 11 Lunar Module "Eagle" (ID: 1969-059C)',
+                url: 'https://nssdc.gsfc.nasa.gov/nmc/spacecraft/display.action?id=1969-059C',
+                agency: 'NASA Goddard Space Flight Center (GSFC)'
+            },
+            {
+                id: 'CIT-6',
+                title: 'NASA Mission Overview & Earth Observatory: Apollo 11 Landing Site (Mare Tranquillitatis)',
+                url: 'https://www.nasa.gov/missions/apollo/apollo-11/apollo-11-mission-overview/',
+                agency: 'NASA History & Johnson Space Center'
+            },
+            {
+                id: 'CIT-7',
+                title: 'NASA Science: Surveyor 3 Mission Overview',
+                url: 'https://science.nasa.gov/mission/surveyor-3/',
+                agency: 'NASA Science Mission Directorate'
+            },
+            {
+                id: 'CIT-8',
+                title: 'NASA: Apollo 15 Mission Overview & Lunar Rover Details',
+                url: 'https://www.nasa.gov/mission/apollo-15/',
+                agency: 'NASA'
+            },
+            {
+                id: 'CIT-9',
+                title: 'NASA Apollo 15 Preliminary Science Report',
+                url: 'https://www.nasa.gov/wp-content/uploads/static/history/alsj/a15/as15psr.pdf',
+                agency: 'NASA'
+            }
+        ];
+
+        // ==========================================
+        // 2. CELESTIAL BODIES, HARDWARE NODES, STORIES, TIMELINES & QUIZZES
+        // ==========================================
+        const PLANET_DATA = {
+            mars: {
+                name: 'MARS',
+                radius: 2.1,
+                atmosphereColor: 0x105BD8,
+                initialRotationY: -1.65,
+                hudSummary: '3 SITES MAPPED (SPIRIT, OPPORTUNITY, PATHFINDER)',
+                rovers: [
+                    {
+                        id: 'spirit',
+                        name: 'Spirit',
+                        subtitle: 'Mars Exploration Rover — Gusev Crater',
+                        lat: -14.57,
+                        lon: 175.47,
+                        coordsLabel: 'Gusev Crater (14.57° S, 175.47° E)',
+                        status: 'Mission Completed (2004–2010)',
+                        imageUrl: 'https://imagetourl.cloud/fwxy76z5x8tf.jpg',
+                        imageCaption: 'Spirit rover on the surface of Mars inside Gusev Crater.',
+                        stats: [
+                            { label: 'Landing Date', value: 'Jan. 3, 2004 (PST) / Jan. 4 (UTC)' },
+                            { label: 'Active Duration', value: '6+ Years (Planned: 90 Sols)' },
+                            { label: 'Distance Traveled', value: '4.8 Miles (7.73 km)' },
+                            { label: 'Raw Images Returned', value: '124,838 Images' },
+                            { label: 'Steepest Slope Climbed', value: '30 Degrees' }
+                        ],
+                        storyParagraphs: [
+                            'Launched as one half of NASA\'s twin Mars Exploration Rover pair, Spirit landed inside Gusev Crater on January 3, 2004—on the opposite side of Mars from its twin, Opportunity. Scientists selected Gusev Crater because orbital imagery suggested it once held an ancient lake.',
+                            'Spirit\'s primary scientific objective was to search for and characterize rocks and minerals that hold clues of past water activity on Mars. Using its rock abrasion tool and spectrometers, Spirit sampled rocks and soil near its landing site, searched for iron-bearing and water-altered minerals, characterized mineral textures, and determined the geological processes that shaped the region.',
+                            'Although designed for a 90-Martian-day (sol) mission, Spirit operated for over six years, climbing slopes as steep as 30 degrees, traveling 4.8 miles (7.73 km), and transmitting 124,838 raw images before becoming embedded in soft sand at Troy and concluding communications in 2010.'
+                        ],
+                        timeline: [
+                            { date: 'June 10, 2003', title: 'Launch from Cape Canaveral', desc: 'Spirit launched aboard a Delta II rocket from Cape Canaveral Air Force Station, Florida.' },
+                            { date: 'January 3, 2004', title: 'Landing at Gusev Crater', desc: 'Spirit bounced safely to a stop inside Gusev Crater using an airbag landing system.' },
+                            { date: '2004–2007', title: 'Columbia Hills & Silica Discovery', desc: 'Spirit climbed Husband Hill (up to 30° slopes) and uncovered bright, silica-rich soil near Home Plate, strong evidence of ancient hydrothermal water.' },
+                            { date: 'May 2009 – March 2010', title: 'Final Stationary Science Station', desc: 'After becoming trapped in soft sulfate-rich sand, Spirit continued conducting stationary atmospheric and soil science until its final transmission on March 22, 2010.' }
+                        ],
+                        citations: ['CIT-1', 'CIT-2'],
+                        quiz: [
+                            {
+                                question: 'Where did NASA\'s Spirit rover land on Mars on January 3, 2004?',
+                                options: ['Meridiani Planum', 'Gusev Crater (Landing site)', 'Ares Vallis region', 'Jezero Crater basin'],
+                                correctIndex: 1,
+                                explanation: 'Spirit landed inside Gusev Crater, while its twin rover Opportunity landed on the opposite side of Mars at Meridiani Planum.'
+                            },
+                            {
+                                question: 'What was the primary scientific goal of the twin rovers Spirit and Opportunity?',
+                                options: [
+                                    'To search and characterize rocks/minerals for water clues',
+                                    'To collect surface soil samples for Earth return',
+                                    'To test atmospheric flight stability via drones',
+                                    'To establish permanent robotic habitats'
+                                ],
+                                correctIndex: 0,
+                                explanation: 'Spirit and Opportunity were designed as robotic field geologists to examine rocks, minerals, and soils for evidence of past liquid water.'
+                            },
+                            {
+                                question: 'How far did Spirit travel and how many raw images did it return during its mission?',
+                                options: [
+                                    'Traveled 28 miles with 217,594 raw images',
+                                    'Traveled 4.8 miles with 124,838 raw images',
+                                    'Traveled 100 meters with 550 raw images',
+                                    'Traveled 12 miles with 16,500 raw images'
+                                ],
+                                correctIndex: 1,
+                                explanation: 'Spirit traveled 4.8 miles (7.73 km), climbed slopes up to 30 degrees, and returned 124,838 raw images over its 6+ year lifespan.'
+                            },
+                            {
+                                question: 'Why did NASA equip Spirit and Opportunity with instruments to analyze iron minerals?',
+                                options: [
+                                    'To mine surface metal for equipment repairs',
+                                    'To find specific mineral types that form in water',
+                                    'To measure magnetic core strength exclusively',
+                                    'To reflect sunlight to power instruments'
+                                ],
+                                correctIndex: 1,
+                                explanation: 'Characterizing iron-bearing minerals and rock textures reveals whether rocks were altered by liquid water and what environmental conditions existed.'
+                            }
+                        ]
+                    },
+                    {
+                        id: 'opportunity',
+                        name: 'Opportunity',
+                        subtitle: 'Mars Exploration Rover — Meridiani Planum',
+                        lat: -1.95,
+                        lon: 354.47,
+                        coordsLabel: 'Meridiani Planum (1.95° S, 5.53° W)',
+                        status: 'Mission Completed (2004–2018)',
+                        imageUrl: 'https://imagetourl.cloud/kae5ge6bt4la.jpg',
+                        imageCaption: 'Opportunity was NASA&apos;s slongest-running rover mission.',
+                        stats: [
+                            { label: 'Landing Date', value: 'Jan. 24, 2004 (PST) / Jan. 25 (UTC)' },
+                            { label: 'Active Duration', value: '14+ Years (Nearly 15 Earth Years)' },
+                            { label: 'Distance Traveled', value: '28.06 Miles (45.16 km)' },
+                            { label: 'Raw Images Returned', value: '217,594 Images' },
+                            { label: 'Steepest Slope Climbed', value: '32 Degrees' }
+                        ],
+                        storyParagraphs: [
+                            'Opportunity landed at Meridiani Planum on January 24, 2004, directly on the opposite side of Mars from its twin rover Spirit. Almost immediately after rolling off its lander inside Eagle Crater, Opportunity discovered tiny iron-rich spheres nicknamed "blueberries" (hematite concretions) embedded in layered bedrock—clear evidence that liquid water once soaked the area.',
+                            'Like Spirit, Opportunity worked to sample rocks and soil, identify water-bearing minerals, and determine the geological history of ancient Martian environments. Built for a 90-sol warranty, Opportunity shattered every endurance record in planetary exploration, operating for more than 14 years.',
+                            'Before a planet-encircling dust storm ended its solar-powered mission in June 2018, Opportunity drove over 28 miles (more than a full marathon), climbed slopes as steep as 32 degrees, and returned 217,594 raw images.'
+                        ],
+                        timeline: [
+                            { date: 'July 7, 2003', title: 'Launch from Cape Canaveral', desc: 'Opportunity launched three weeks after Spirit to explore the opposite hemisphere of Mars.' },
+                            { date: 'January 24, 2004', title: 'Hole-in-One Landing at Meridiani Planum', desc: 'Opportunity bounced directly into Eagle Crater at Meridiani Planum, exposing ancient sedimentary bedrock.' },
+                            { date: '2004–2014', title: 'Endurance, Victoria & Endeavour Craters', desc: 'Opportunity discovered hematite "blueberries" and clay minerals formed in neutral-pH water, surviving slopes up to 32 degrees.' },
+                            { date: 'June 2018 – Feb. 13, 2019', title: 'Global Dust Storm & End of Mission', desc: 'A massive planet-wide dust storm blocked sunlight to Opportunity\'s solar arrays; NASA officially concluded the 14+ year mission on February 13, 2019.' }
+                        ],
+                        citations: ['CIT-1', 'CIT-2'],
+                        quiz: [
+                            {
+                                question: 'Where did Opportunity land in relation to its twin rover Spirit?',
+                                options: [
+                                    'Inside the exact same crater nearby',
+                                    'On the opposite side of Meridiani Planum',
+                                    'Near the northern polar ice cap limits',
+                                    'Inside the Valles Marineris canyon system'
+                                ],
+                                correctIndex: 1,
+                                explanation: 'Opportunity landed at Meridiani Planum on January 24, 2004, on the opposite side of Mars from Spirit at Gusev Crater.'
+                            },
+                            {
+                                question: 'How long did Opportunity operate on Mars despite its 90-day design?',
+                                options: ['Operated for 6 months total', 'Operated for 2 Earth years', 'Operated for over 14 years', 'Operated for 25 Earth years'],
+                                correctIndex: 2,
+                                explanation: 'Opportunity operated for over 14 years (from January 2004 until June 2018), outlasting its 90-sol design life by nearly 60 times.'
+                            },
+                            {
+                                question: 'How many miles did Opportunity drive and how many images did it return?',
+                                options: [
+                                    'Traveled 4.8 miles with 124,838 images',
+                                    'Traveled 28+ miles with 217,594 raw images',
+                                    'Traveled 1 mile with 5,000 raw images',
+                                    'Traveled 50 miles with 90,000 images'
+                                ],
+                                correctIndex: 1,
+                                explanation: 'Opportunity traveled over 28 miles (45.16 km), climbed 32-degree slopes, and returned 217,594 raw images.'
+                            },
+                            {
+                                question: 'What is the steepest slope Opportunity climbed during its crater exploration?',
+                                options: ['Climbed a 12-degree slope', 'Climbed a 20-degree slope', 'Climbed a 32-degree slope', 'Climbed a 45-degree slope'],
+                                correctIndex: 2,
+                                explanation: 'Opportunity navigated slopes as steep as 32 degrees while exploring crater rims such as Endurance and Endeavour Craters.'
+                            }
+                        ]
+                    },
+                    {
+                        id: 'pathfinder',
+                        name: 'Pathfinder & Sojourner',
+                        subtitle: 'Lander & First Wheeled Mars Rover — Ares Vallis',
+                        lat: 19.13,
+                        lon: 326.78,
+                        coordsLabel: 'Ares Vallis (19.13° N, 33.22° W)',
+                        status: 'Mission Completed (July 4 – Sept. 27, 1997)',
+                        imageUrl: 'https://imagetourl.cloud/sv4zfybvc1o9.png',
+                        imageCaption: 'Sojourner rover on Ares Vallis next to Pathfinder lander&apos;s airbags.',
+                        stats: [
+                            { label: 'Launch Date', value: 'Dec. 4, 1996 UTC (Cape Canaveral)' },
+                            { label: 'Mars Landing Date', value: 'July 4, 1997 (Ares Vallis)' },
+                            { label: 'End of Mission', value: 'September 27, 1997' },
+                            { label: 'Sojourner Rover Size', value: '23 lbs (10.6 kg) • 1 ft (30 cm) tall' },
+                            { label: 'Total Data Returned', value: '2.3 Billion Bits (17,050+ Images)' }
+                        ],
+                        storyParagraphs: [
+                            'Launched from Cape Canaveral Air Force Station, Florida, on December 4, 1996 UTC, Mars Pathfinder was designed as an innovative technology demonstration to deliver an instrumented lander and the first-ever free-ranging wheeled rover to the Red Planet at Ares Vallis.',
+                            'To survive entry and touchdown on July 4, 1997, Pathfinder deployed a giant 19-foot (5.8-meter) diameter airbag cushion. Upon impact, the spacecraft bounced across the Martian surface like a giant beach ball about 15 times—reaching heights as high as 50 feet (15 meters)—before coming to rest and opening its petals.',
+                            'On the night of July 5, the 23-pound (10.6 kg), 1-foot-tall (30 cm) rover stood up to its full height and rolled onto Mars. Named "Sojourner" after American civil-rights crusader Sojourner Truth, the rover was also dedicated to honor an astronaut who had passed away a year earlier. Together, the lander and rover analyzed Martian climate, atmosphere, geology, and rock/soil composition—returning 2.3 billion bits of information, including 16,500 lander images, 550 rover images, and 15 chemical analyses of rocks and soil before final transmission on September 27, 1997.'
+                        ],
+                        timeline: [
+                            { date: 'December 4, 1996 UTC', title: 'Launch from Cape Canaveral, Florida', desc: 'Mars Pathfinder launched from Cape Canaveral Air Force Station aboard a Delta II rocket.' },
+                            { date: 'July 4, 1997', title: '19-Foot Airbag Bounce Landing at Ares Vallis', desc: 'Pathfinder\'s 19-ft (5.8 m) airbags bounced ~15 times, up to 50 ft (15 m) high, landing safely in the ancient flood plain of Ares Vallis.' },
+                            { date: 'Night of July 5, 1997', title: 'Sojourner Rover Stands Up & Deploys', desc: 'The 23-lb (10.6 kg), 1-ft (30 cm) Sojourner rover stood to its full height and rolled onto the Martian soil.' },
+                            { date: 'September 27, 1997', title: 'End of Mission (2.3 Billion Bits Returned)', desc: 'After returning 16,500 lander images, 550 rover images, and 15 chemical rock/soil analyses, Pathfinder transmitted its final data.' }
+                        ],
+                        citations: ['CIT-3', 'CIT-4'],
+                        quiz: [
+                            {
+                                question: 'How did Mars Pathfinder cushion its landing at Ares Vallis on July 4, 1997?',
+                                options: [
+                                    'Used tethered sky-crane rocket thrusters',
+                                    'Used 19-ft airbags bouncing ~15 times',
+                                    'Landed safely in a deep liquid water sea',
+                                    'Used deployable atmospheric glider wings'
+                                ],
+                                correctIndex: 1,
+                                explanation: 'Pathfinder used a 19-foot (5.8-meter) diameter airbag system that bounced like a giant beach ball about 15 times, reaching heights of 50 feet (15 meters).'
+                            },
+                            {
+                                question: 'Who was the Mars Pathfinder rover "Sojourner" named after by NASA?',
+                                options: [
+                                    'An ancient Roman celestial mythology god',
+                                    'American civil-rights crusader Sojourner Truth',
+                                    'The lead mechanical engineer of wheels',
+                                    'A prominent northern night constellation'
+                                ],
+                                correctIndex: 1,
+                                explanation: 'NASA named the 23-pound rover after American civil-rights crusader Sojourner Truth following a worldwide student essay contest.'
+                            },
+                            {
+                                question: 'How much data and how many images did Mars Pathfinder return by Sept. 27, 1997?',
+                                options: [
+                                    '2.3 billion bits with 17,050 total images',
+                                    '500 megabytes with 20 weather photos',
+                                    '10 billion bits with 300,000 pictures',
+                                    'Only atmospheric temperature readings'
+                                ],
+                                correctIndex: 0,
+                                explanation: 'Mars Pathfinder returned 2.3 billion bits of data, including 16,500 images from the lander, 550 images from Sojourner, and 15 chemical analyses of rocks and soil.'
+                            },
+                            {
+                                question: 'What were the exact weight and height dimensions of the Sojourner rover?',
+                                options: [
+                                    'Weighed 2,000 lbs and stood 7 feet tall',
+                                    'Weighed 23 lbs (10.6 kg) and 1 foot tall',
+                                    'Weighed 400 lbs and stood 5 feet tall',
+                                    'Weighed 5 lbs and stood 4 inches tall'
+                                ],
+                                correctIndex: 1,
+                                explanation: 'Sojourner weighed just 23 pounds (10.6 kg) and stood 1 foot (30 cm) tall when it rose to its full height on the night of July 5, 1997.'
+                            }
+                        ]
+                    }
+                ]
+            },
+            moon: {
+                name: 'MOON',
+                radius: 2.0,
+                atmosphereColor: 0x105BD8,
+                initialRotationY: 0.4,
+                hudSummary: '3 LUNAR SITES MAPPED (APOLLO 11, SURVEYOR 3, APOLLO LRV)',
+                rovers: [
+                    {
+                        id: 'apollo-11-eagle',
+                        name: 'Apollo 11 LM "Eagle"',
+                        subtitle: 'First Crewed Lunar Lander',
+                        lat: 0.674,
+                        lon: 23.473,
+                        coordsLabel: 'Mare Tranquillitatis (0.67° N, 23.47° E)',
+                        status: 'Historic Monument on the Moon (July 20, 1969)',
+                        imageUrl: 'https://imagetourl.cloud/fedvgwrfhqkx.webp',
+                        imageCaption: 'Buzz Aldrin standing next to the Apollo 11 Lunar Module Eagle descent stage at Tranquility Base.',
+                        stats: [
+                            { label: 'Launch Date', value: 'July 16, 1969 at 13:32 UTC' },
+                            { label: 'Lunar Landing', value: 'July 20, 1969 at 20:17:40 UTC' },
+                            { label: 'Crew Aboard Eagle', value: 'Neil A. Armstrong & Buzz Aldrin' },
+                            { label: 'Surface Traverse', value: '~250 Meters (Up to 100 m from LM)' },
+                            { label: 'Samples Returned', value: '21.55 kg (47.5 lbs) Rock & Soil' }
+                        ],
+                        storyParagraphs: [
+                            'Apollo 11 Lunar Module "Eagle" as the first crewed spacecraft to land on the Moon. Carrying Commander Neil A. Armstrong and Lunar Module Pilot Edwin E. "Buzz" Aldrin, Jr., it launched on July 16, 1969, at 13:32 UTC and touched down at Mare Tranquillitatis (Tranquility Base) on July 20, 1969, at 20:17:40 UTC.',
+                            'At 02:56:15 UTC on July 21, 1969, Neil Armstrong stepped onto the lunar surface, becoming the first human to walk on the Moon, with Buzz Aldrin following 19 minutes later. Unveiling a stainless-steel plaque attached to the ladder of the Eagle\'s descent stage, they read: "Here men from the planet Earth first set foot upon the Moon July 1969, A.D. We came in peace for all mankind."',
+                            'During their extravehicular activity, Armstrong and Aldrin traversed a total distance of about 250 meters—ranging up to 100 meters from the Lunar Module—deployed the Early Apollo Scientific Experiments Package (EASEP) and other instruments, captured iconic photographs, and collected 21.55 kg of lunar rock and soil. When the ascent stage lifted off to return the astronauts to Command Module Columbia, the octagonal descent stage of "Eagle" remained behind on the Moon as an enduring monument to human exploration.'
+                        ],
+                        timeline: [
+                            { date: 'July 16, 1969 • 13:32 UTC', title: 'Apollo 11 Saturn V Launch', desc: 'Launched from Kennedy Space Center carrying Neil Armstrong, Buzz Aldrin, and Michael Collins.' },
+                            { date: 'July 20, 1969 • 20:17:40 UTC', title: 'Lunar Module "Eagle" Touchdown', desc: 'Commander Neil Armstrong and LM Pilot Buzz Aldrin landed "Eagle" safely at Mare Tranquillitatis.' },
+                            { date: 'July 21, 1969 • 02:56:15 UTC', title: 'First Human Steps & EASEP Deployment', desc: 'Armstrong stepped onto the Moon, followed 19 minutes later by Aldrin. They traversed ~250 m, deployed EASEP instruments, and collected 21.55 kg of samples.' },
+                            { date: 'July 21, 1969 • 17:54 UTC', title: 'Ascent Liftoff — Descent Stage Remains', desc: 'The upper ascent stage lifted off from the descent stage, leaving the "Eagle" descent half permanently on Tranquility Base.' }
+                        ],
+                        citations: ['CIT-5', 'CIT-6'],
+                        quiz: [
+                            {
+                                question: 'Which astronauts piloted Apollo 11 Lunar Module "Eagle" to the first lunar landing?',
+                                options: [
+                                    'Neil Armstrong and Buzz Aldrin Jr.',
+                                    'Alan Shepard and Edgar Mitchell',
+                                    'John Young and Charles Duke',
+                                    'Pete Conrad and Alan Bean'
+                                ],
+                                correctIndex: 0,
+                                explanation: 'Commander Neil A. Armstrong and Lunar Module Pilot Edwin E. "Buzz" Aldrin, Jr. landed Eagle on the Moon and became the first humans to walk on the lunar surface.'
+                            },
+                            {
+                                question: 'Which part of the Apollo 11 Lunar Module "Eagle" remains on the Moon today?',
+                                options: [
+                                    'The Command Module return capsule',
+                                    'The Descent Stage (bottom half of LM)',
+                                    'The Saturn V third-stage booster rocket',
+                                    'None; the entire vehicle returned'
+                                ],
+                                correctIndex: 1,
+                                explanation: 'The Lunar Module was built in two halves: the Descent Stage served as the launch pad for the Ascent Stage and remains permanently on the Moon at Tranquility Base.'
+                            },
+                            {
+                                question: 'What scientific packages and sample mass did Armstrong and Aldrin gather?',
+                                options: [
+                                    'Deployed EASEP and collected 21.55 kg lunar rocks',
+                                    'Deployed weather stations and 500 kg ice',
+                                    'Installed nuclear generators and dust jars',
+                                    'Planted flags without taking core samples'
+                                ],
+                                correctIndex: 0,
+                                explanation: 'The astronauts traversed about 250 meters (ranging up to 100 meters from the LM), deployed the EASEP scientific instruments, and collected 21.55 kg of lunar rock and soil.'
+                            },
+                            {
+                                question: 'What exact message is inscribed on the plaque left on Eagle\'s descent stage?',
+                                options: [
+                                    '"To infinity and beyond, July 1969."',
+                                    '"Here men from planet Earth first set foot upon the Moon July 1969, A.D. We came in peace for all mankind."',
+                                    '"Property of NASA Mission Control."',
+                                    '"First stop on our journey to Mars."'
+                                ],
+                                correctIndex: 1,
+                                explanation: 'The plaque mounted on Eagle\'s descent stage ladder reads: "Here men from the planet Earth first set foot upon the Moon July 1969, A.D. We came in peace for all mankind."'
+                            }
+                        ]
+                    },
+                    {
+                        id: 'surveyor-3',
+                        name: 'Surveyor 3 Lander',
+                        subtitle: 'Surveyor-C • Lunar Soft-Landing Mission',
+                        lat: -3.00,
+                        lon: 336.59,
+                        coordsLabel: 'Southeastern Oceanus Procellarum (3.00° S, 23.41° W)',
+                        status: 'Mission Completed • Last Contact May 4, 1967',
+                        imageUrl: 'https://assets.science.nasa.gov/dynamicimage/assets/science/psd/solar/2023/06/as12-48-7134_1280.jpg',
+                        imageCaption: 'Apollo 12 astronaut Alan Bean beside Surveyor 3 during the November 1969 visit.',
+                        stats: [
+                            { label: 'Launch', value: 'April 17, 1967 • 07:05:01 UT' },
+                            { label: 'Lunar Landing', value: 'April 20, 1967 • 00:04:17 UT' },
+                            { label: 'Last Contact', value: 'May 4, 1967' },
+                            { label: 'Spacecraft Mass', value: '2,200 lbs (997.9 kg)' },
+                            { label: 'Scientific Instruments', value: 'TV Camera & Surface Sampler' },
+                            { label: 'Mission Management', value: 'NASA / JPL' },
+                            { label: 'Launch Vehicle', value: 'Atlas Centaur (AC-12)' },
+                            { label: 'Sampler Reach / Depth', value: '5 ft (1.5 m) / 7 in (18 cm)' }
+                        ],
+                        storyParagraphs: [
+                            'Surveyor 3 was an uncrewed United States lunar lander launched on April 17, 1967, at 07:05:01 UT from Cape Canaveral Launch Complex 36B. Its spacecraft was Surveyor-C, with a mass of 2,200 pounds (997.9 kg), and its mission was managed by NASA and the Jet Propulsion Laboratory. It was the third engineering flight in the Surveyor series and the second Surveyor spacecraft to make a soft landing on the Moon.',
+                            'Surveyor 3 was the first spacecraft in the series to carry a surface-sampling instrument. The sampler could reach about 5 feet (1.5 meters) from the lander and dig as deep as 7 inches (18 centimeters). Together with its TV camera, it performed tests on lunar soil. Scientists concluded from these tests that the lunar surface was solid enough to support the weight of an Apollo Lunar Module.',
+                            'During descent, the main engine failed to cut off at the planned moment, about 14 feet (4.3 meters) above the surface. Surveyor 3 bounced twice: first to about 33 feet (10 meters), then to about 10 feet (3 meters), before settling in southeastern Oceanus Procellarum at 00:04:17 UT on April 20, 1967. Less than an hour later, it began sending pictures of the surrounding area.',
+                            'Surveyor 3 transmitted 6,326 television pictures. Its camera used 25 mm and 100 mm focal-length lenses, could send 200-line pictures, and was also capable of 600-line digital images. After the lander’s last contact on May 4, 1967, Apollo 12 astronauts Charles Conrad Jr. and Alan L. Bean visited it on November 19, 1969, and recovered parts including the soil scoop and camera system.'
+                        ],
+                        timeline: [
+                            { date: 'April 17, 1967 • 07:05:01 UT', title: 'Launch from Cape Canaveral', desc: 'Surveyor 3 launched from Launch Complex 36B aboard an Atlas Centaur (AC-12).'},
+                            { date: 'April 20, 1967 • 00:04:17 UT', title: 'Soft Landing in Oceanus Procellarum', desc: 'After two bounces caused by the engine failing to cut off at the planned moment, Surveyor 3 settled on the lunar surface.'},
+                            { date: 'April 20 – May 4, 1967', title: 'Lunar Surface Science & TV Images', desc: 'The lander used its TV camera and surface sampler, transmitting 6,326 pictures and testing lunar soil.'},
+                            { date: 'May 4, 1967', title: 'Last Contact', desc: 'NASA received the final contact from Surveyor 3 after the lunar night began.'},
+                            { date: 'November 19, 1969', title: 'Apollo 12 Astronauts Visit', desc: 'Charles Conrad Jr. and Alan L. Bean visited Surveyor 3 and recovered components including its soil scoop and camera system.'}
+                        ],
+                        citations: ['CIT-7'],
+                        quiz: [
+                            {
+                                question: 'What was Surveyor 3 in the Surveyor series to achieve a soft landing on the Moon?',
+                                options: ['The first', 'The second', 'The fourth', 'The fifth'],
+                                correctIndex: 1,
+                                explanation: 'Surveyor 3 was the second spacecraft in the Surveyor series to make a soft landing on the Moon.'
+                            },
+                            {
+                                question: 'Which scientific instruments did Surveyor 3 carry?',
+                                options: ['A TV camera and a surface sampler', 'A drill and a weather balloon', 'A telescope and a seismometer', 'A microphone and a solar-powered helicopter'],
+                                correctIndex: 0,
+                                explanation: 'Surveyor 3 carried a TV camera and, for the first time in the series, a surface-sampling instrument.'
+                            },
+                            {
+                                question: 'Why did Surveyor 3 bounce after its first contact with the lunar surface?',
+                                options: ['Its landing legs folded immediately', 'Its main engine did not cut off at the planned moment', 'A dust storm pushed it upward', 'Its parachute opened too late'],
+                                correctIndex: 1,
+                                explanation: 'The main engine failed to cut off at the planned moment, about 14 feet (4.3 meters) above the surface, causing two bounces before the lander settled.'
+                            },
+                            {
+                                question: 'What did Surveyor 3’s surface-sampling tests help scientists conclude?',
+                                options: ['The Moon had a thick atmosphere', 'The lunar soil could support an Apollo Lunar Module', 'The lunar surface was covered in liquid water', 'The Moon had strong winds'],
+                                correctIndex: 1,
+                                explanation: 'The tests showed that the lunar surface was firm enough to support the weight of an Apollo Lunar Module.'
+                            }
+                        ]
+                    },
+                    {
+                        id: 'apollo-lunar-rover',
+                        name: 'Lunar Roving Vehicles',
+                        subtitle: 'Apollo 15 • First Crewed Lunar Rover',
+                        lat: 26.13239,
+                        lon: 3.63330,
+                        coordsLabel: 'Hadley-Apennine / Hadley Rille (26.13239° N, 3.63330° E)',
+                        status: 'Historic Lunar Vehicle • Left on the Moon in August 1971',
+                        imageUrl: 'https://images-assets.nasa.gov/image/as15-85-11451/as15-85-11451~large.jpg',
+                        imageCaption: 'Lunar Roving Vehicle parked beside Hadley Rille during the first surface EVA.',
+                        stats: [
+                            { label: 'Vehicle Type', value: 'Drivable, crewed lunar rover' },
+                            { label: 'Apollo 15 Landing', value: 'July 30, 1971 • 22:16:29 UT' },
+                            { label: 'Crew', value: 'David R. Scott & James B. Irwin' },
+                            { label: 'Surface Activities', value: '3 EVAs' },
+                            { label: 'Distance Traveled', value: '27.9 km (17.3 miles)' },
+                            { label: 'Samples Collected', value: '77.32 kg of rocks and soil' },
+                            { label: 'First Moonwalk EVA', value: 'July 31 • 13:13:10–19:45:59 UT' },
+                            { label: 'Apollo 15 Rover Location', value: 'Left near Hadley Rille • August 1971' }
+                        ],
+                        storyParagraphs: [
+                            'The Lunar Roving Vehicle (LRV) was a drivable, crewed vehicle used by astronauts on the Moon. Apollo 15 was the first mission to use a lunar rover. The Lunar Module separated at 18:13:30 UT and landed at 22:16:29 UT on July 30, 1971, in the Hadley-Apennine region near the Apennine mountain range, at the coordinates shown on this map.',
+                            'Commander David R. Scott and Lunar Module Pilot James B. Irwin explored the lunar surface during three moonwalks. Their first surface EVA began on July 31, 1971, from 13:13:10 UT to 19:45:59 UT. Across the mission’s surface activities, Scott and Irwin traveled 27.9 kilometers and collected 77.32 kilograms of lunar rocks and soil samples.',
+                            'The Lunar Roving Vehicle was left near Hadley Rille in August 1971. Later Apollo missions also left their lunar rovers on the Moon: Apollo 16’s rover was left near the Descartes Highlands in April 1972, and Apollo 17’s rover was left near the Taurus-Littrow Valley in December 1972. Eugene Cernan was the last astronaut to drive an Apollo lunar rover.'
+                        ],
+                        timeline: [
+                            { date: 'July 30, 1971 • 18:13:30 UT', title: 'Lunar Module Separation', desc: 'The Lunar Module separated as the crew prepared for lunar descent.'},
+                            { date: 'July 30, 1971 • 22:16:29 UT', title: 'Landing in Hadley-Apennine', desc: 'David R. Scott and James B. Irwin landed in the Mare Imbrium region near the Apennine mountain range.'},
+                            { date: 'July 31, 1971 • 13:13:10–19:45:59 UT', title: 'First Lunar Surface EVA', desc: 'Scott and Irwin began their first moonwalk and used the Lunar Roving Vehicle during surface exploration.'},
+                            { date: 'July 31 – August 2, 1971', title: 'Three Surface EVAs Completed', desc: 'The astronauts traveled 27.9 km and collected 77.32 kg of lunar rocks and soil.'},
+                            { date: 'August 1971', title: 'Apollo 15 LRV Left on the Moon', desc: 'The rover was left near Hadley Rille. Apollo 16 and Apollo 17 later left their rovers at the Descartes Highlands and Taurus-Littrow Valley.'}
+                        ],
+                        citations: ['CIT-8', 'CIT-9'],
+                        quiz: [
+                            {
+                                question: 'What was special about Apollo 15 and the Lunar Roving Vehicle?',
+                                options: ['It was the first Apollo mission to use a lunar rover', 'It was the first mission to land on Mars', 'It carried the first TV camera to the Moon', 'It was an uncrewed mission'],
+                                correctIndex: 0,
+                                explanation: 'Apollo 15 was the first lunar landing mission to use a drivable Lunar Roving Vehicle.'
+                            },
+                            {
+                                question: 'Which two astronauts explored the Moon’s surface on Apollo 15?',
+                                options: ['Neil Armstrong and Buzz Aldrin', 'David R. Scott and James B. Irwin', 'Charles Conrad and Alan Bean', 'John Young and Eugene Cernan'],
+                                correctIndex: 1,
+                                explanation: 'Commander David R. Scott and Lunar Module Pilot James B. Irwin conducted the lunar surface exploration.'
+                            },
+                            {
+                                question: 'How far did the Apollo 15 crew travel and how many samples did they collect?',
+                                options: ['5 km and 10 kg', '27.9 km and 77.32 kg', '100 km and 200 kg', '1.5 km and 18 kg'],
+                                correctIndex: 1,
+                                explanation: 'The Apollo 15 crew traveled 27.9 kilometers and collected 77.32 kilograms of lunar rocks and soil.'
+                            },
+                            {
+                                question: 'Where was the Lunar Roving Vehicle left?',
+                                options: ['Near Hadley Rille', 'Near the Descartes Highlands', 'Near the Taurus-Littrow Valley', 'At Tranquility Base'],
+                                correctIndex: 0,
+                                explanation: 'The Apollo 15 LRV was left near Hadley Rille. Apollo 16 and Apollo 17 left their rovers near the Descartes Highlands and Taurus-Littrow Valley.'
+                            }
+                        ]
+                    }
+                ]
+            }
+        };
+
+        // Global Application State
+        let currentPlanetKey = 'mars';
+        let autoRotate = true;
+        let isDragging = false;
+        let previousMousePosition = { x: 0, y: 0 };
+        let rotationVelocity = { x: 0, y: 0 };
+
+        // Active Modal & Quiz State
+        let activeHardware = null;
+        let activePlanetName = 'MARS';
+        let currentModalTab = 'story';
+        const userQuizAnswers = {};
+        let lastCorrectCountForConfetti = 0;
+
+        // Three.js Scene Objects
+        let scene, camera, renderer;
+        let planetGroup, planetMesh, atmosphereMesh, orbitalRing1, orbitalRing2, starField;
+        let textures = {};
+        let activeMarkerElements = [];
+
+        // ==========================================
+        // 3. CLEAN PLANETARY TEXTURES (NO GRID LINES)
+        // ==========================================
+        function createPlanetaryTexture(type) {
+            const canvas = document.createElement('canvas');
+            canvas.width = 1024;
+            canvas.height = 512;
+            const ctx = canvas.getContext('2d');
+
+            if (type === 'mars') {
+                const grad = ctx.createLinearGradient(0, 0, 0, canvas.height);
+                grad.addColorStop(0, '#4a1e18');
+                grad.addColorStop(0.18, '#6e281d');
+                grad.addColorStop(0.5, '#8c3323');
+                grad.addColorStop(0.82, '#642419');
+                grad.addColorStop(1, '#441a15');
+                ctx.fillStyle = grad;
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+                for (let i = 0; i < 48; i++) {
+                    const x = Math.random() * canvas.width;
+                    const y = 35 + Math.random() * (canvas.height - 70);
+                    const rx = 30 + Math.random() * 110;
+                    const ry = 15 + Math.random() * 55;
+                    ctx.beginPath();
+                    ctx.ellipse(x, y, rx, ry, Math.random() * Math.PI, 0, Math.PI * 2);
+                    ctx.fillStyle = `rgba(22, 10, 14, ${0.14 + Math.random() * 0.24})`;
+                    ctx.fill();
+                }
+
+                for (let i = 0; i < 180; i++) {
+                    const x = Math.random() * canvas.width;
+                    const y = Math.random() * canvas.height;
+                    const r = 3 + Math.random() * 24;
+                    ctx.beginPath();
+                    ctx.arc(x, y, r, 0, Math.PI * 2);
+                    ctx.strokeStyle = `rgba(180, 85, 60, ${0.08 + Math.random() * 0.14})`;
+                    ctx.lineWidth = 1.5;
+                    ctx.stroke();
+
+                    ctx.fillStyle = `rgba(25, 10, 12, ${0.08 + Math.random() * 0.15})`;
+                    ctx.fill();
+                }
+
+            } else {
+                const grad = ctx.createLinearGradient(0, 0, 0, canvas.height);
+                grad.addColorStop(0, '#475569');
+                grad.addColorStop(0.5, '#64748B');
+                grad.addColorStop(1, '#334155');
+                ctx.fillStyle = grad;
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+                for (let i = 0; i < 28; i++) {
+                    const x = Math.random() * canvas.width;
+                    const y = 50 + Math.random() * (canvas.height - 100);
+                    const rx = 40 + Math.random() * 120;
+                    const ry = 25 + Math.random() * 70;
+                    ctx.beginPath();
+                    ctx.ellipse(x, y, rx, ry, Math.random() * Math.PI, 0, Math.PI * 2);
+                    ctx.fillStyle = `rgba(15, 23, 42, ${0.22 + Math.random() * 0.25})`;
+                    ctx.fill();
+                }
+
+                for (let i = 0; i < 280; i++) {
+                    const x = Math.random() * canvas.width;
+                    const y = Math.random() * canvas.height;
+                    const r = 2 + Math.random() * 22;
+
+                    ctx.beginPath();
+                    ctx.arc(x, y, r, 0, Math.PI * 2);
+                    ctx.fillStyle = `rgba(15, 23, 42, ${0.18 + Math.random() * 0.22})`;
+                    ctx.fill();
+
+                    ctx.beginPath();
+                    ctx.arc(x - r * 0.12, y - r * 0.12, r, 0, Math.PI * 2);
+                    ctx.strokeStyle = `rgba(226, 232, 240, ${0.15 + Math.random() * 0.25})`;
+                    ctx.lineWidth = 1.2;
+                    ctx.stroke();
+                }
+            }
+
+            const texture = new THREE.CanvasTexture(canvas);
+            texture.needsUpdate = true;
+            return texture;
+        }
+
+        // ==========================================
+        // 4. COORDINATE CONVERSION
+        // ==========================================
+        function latLonToVector3(lat, lon, radius) {
+            const phi = (90 - lat) * (Math.PI / 180);
+            const theta = (lon + 180) * (Math.PI / 180);
+
+            const x = -(radius * Math.sin(phi) * Math.cos(theta));
+            const z = (radius * Math.sin(phi) * Math.sin(theta));
+            const y = (radius * Math.cos(phi));
+
+            return new THREE.Vector3(x, y, z);
+        }
+
+        // ==========================================
+        // 5. THREE.JS INITIALIZATION
+        // ==========================================
+        function initThreeJS() {
+            const container = document.getElementById('globe-container');
+            const width = container.clientWidth;
+            const height = container.clientHeight;
+
+            scene = new THREE.Scene();
+
+            camera = new THREE.PerspectiveCamera(45, width / height, 0.1, 1000);
+            camera.position.z = getOptimalCameraDistance();
+
+            renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+            renderer.setSize(width, height);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+            container.appendChild(renderer.domElement);
+
+            textures.mars = createPlanetaryTexture('mars');
+            textures.moon = createPlanetaryTexture('moon');
+
+            const ambientLight = new THREE.AmbientLight(0x1e3a8a, 0.75);
+            scene.add(ambientLight);
+
+            const sunLight = new THREE.DirectionalLight(0xffffff, 1.35);
+            sunLight.position.set(5, 3, 5);
+            scene.add(sunLight);
+
+            const rimLight = new THREE.DirectionalLight(0x105BD8, 0.9);
+            rimLight.position.set(-5, -2, -4);
+            scene.add(rimLight);
+
+            createStarfield();
+
+            planetGroup = new THREE.Group();
+            planetGroup.rotation.x = 0.22;
+            planetGroup.rotation.y = PLANET_DATA.mars.initialRotationY;
+            scene.add(planetGroup);
+
+            const sphereGeo = new THREE.SphereGeometry(PLANET_DATA.mars.radius, 64, 64);
+            const sphereMat = new THREE.MeshStandardMaterial({
+                map: textures.mars,
+                roughness: 0.85,
+                metalness: 0.1
+            });
+            planetMesh = new THREE.Mesh(sphereGeo, sphereMat);
+            planetGroup.add(planetMesh);
+
+            const atmoGeo = new THREE.SphereGeometry(PLANET_DATA.mars.radius * 1.035, 64, 64);
+            const atmoMat = new THREE.MeshBasicMaterial({
+                color: 0x105BD8,
+                transparent: true,
+                opacity: 0.14,
+                side: THREE.BackSide
+            });
+            atmosphereMesh = new THREE.Mesh(atmoGeo, atmoMat);
+            planetGroup.add(atmosphereMesh);
+
+            const ringGeo1 = new THREE.RingGeometry(2.75, 2.77, 128);
+            const ringMat1 = new THREE.MeshBasicMaterial({
+                color: 0x105BD8,
+                side: THREE.DoubleSide,
+                transparent: true,
+                opacity: 0.35
+            });
+            orbitalRing1 = new THREE.Mesh(ringGeo1, ringMat1);
+            orbitalRing1.rotation.x = Math.PI / 2.3;
+            orbitalRing1.rotation.y = 0.15;
+            scene.add(orbitalRing1);
+
+            const ringGeo2 = new THREE.RingGeometry(3.05, 3.06, 128);
+            const ringMat2 = new THREE.MeshBasicMaterial({
+                color: 0x0B3D91,
+                side: THREE.DoubleSide,
+                transparent: true,
+                opacity: 0.25
+            });
+            orbitalRing2 = new THREE.Mesh(ringGeo2, ringMat2);
+            orbitalRing2.rotation.x = Math.PI / 1.8;
+            orbitalRing2.rotation.y = -0.25;
+            scene.add(orbitalRing2);
+
+            rebuildRoverPins('mars');
+            setupInteraction(container);
+            window.addEventListener('resize', onWindowResize);
+        }
+
+        function getOptimalCameraDistance() {
+            return window.innerWidth < 640 ? 7.6 : 6.4;
+        }
+
+        function createStarfield() {
+            const starCount = 900;
+            const positions = new Float32Array(starCount * 3);
+            const colors = new Float32Array(starCount * 3);
+
+            const colorWhite = new THREE.Color(0xffffff);
+            const colorNasaBlue = new THREE.Color(0x3b82f6);
+
+            for (let i = 0; i < starCount; i++) {
+                const r = 18 + Math.random() * 35;
+                const theta = Math.random() * Math.PI * 2;
+                const phi = Math.acos(2 * Math.random() - 1);
+
+                positions[i * 3] = r * Math.sin(phi) * Math.cos(theta);
+                positions[i * 3 + 1] = r * Math.sin(phi) * Math.sin(theta);
+                positions[i * 3 + 2] = r * Math.cos(phi);
+
+                const chosenColor = Math.random() > 0.3 ? colorWhite : colorNasaBlue;
+                colors[i * 3] = chosenColor.r;
+                colors[i * 3 + 1] = chosenColor.g;
+                colors[i * 3 + 2] = chosenColor.b;
+            }
+
+            const starGeo = new THREE.BufferGeometry();
+            starGeo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+            starGeo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+
+            const starMat = new THREE.PointsMaterial({
+                size: 0.11,
+                vertexColors: true,
+                transparent: true,
+                opacity: 0.85
+            });
+
+            starField = new THREE.Points(starGeo, starMat);
+            scene.add(starField);
+        }
+
+        // ==========================================
+        // 6. ROVER RED SPOTS
+        // ==========================================
+        function rebuildRoverPins(planetKey) {
+            const markersLayer = document.getElementById('markers-layer');
+            markersLayer.innerHTML = '';
+
+            activeMarkerElements.forEach(item => {
+                if (item.anchor) planetGroup.remove(item.anchor);
+            });
+            activeMarkerElements = [];
+
+            const planet = PLANET_DATA[planetKey];
+
+            planet.rovers.forEach(rover => {
+                const anchor = new THREE.Object3D();
+                const surfacePos = latLonToVector3(rover.lat, rover.lon, planet.radius);
+                anchor.position.copy(surfacePos);
+                planetGroup.add(anchor);
+
+                const pinEl = document.createElement('button');
+                pinEl.type = 'button';
+                pinEl.className = 'marker-pin pointer-events-auto absolute top-0 left-0 -translate-x-1/2 -translate-y-1/2 group focus:outline-none';
+                pinEl.setAttribute('aria-label', `Inspect ${rover.name}`);
+                pinEl.onclick = (e) => {
+                    e.stopPropagation();
+                    openRoverModal(rover, planet.name);
+                };
+
+                pinEl.innerHTML = `
+                    <div class="relative flex items-center justify-center">
+                        <span class="marker-pulse absolute w-8 h-8 rounded-full bg-nasa-red/60 pointer-events-none"></span>
+                        <span class="relative w-4 h-4 rounded-full bg-nasa-red border-2 border-white shadow-[0_0_14px_#FC3D21,0_0_24px_#FC3D21] group-hover:scale-125 transition-transform"></span>
+                        <div class="absolute left-5 top-1/2 -translate-y-1/2 flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-[#040A17]/90 border border-nasa-bright/80 backdrop-blur-md shadow-[0_4px_16px_rgba(0,0,0,0.85)] whitespace-nowrap group-hover:border-nasa-red group-hover:bg-nasa-blue/90 transition-colors">
+                            <span class="w-1.5 h-1.5 rounded-full bg-nasa-red"></span>
+                            <span class="font-display text-xs font-bold tracking-wide text-white">${rover.name}</span>
+                        </div>
+                    </div>
+                `;
+
+                markersLayer.appendChild(pinEl);
+
+                activeMarkerElements.push({
+                    rover,
+                    anchor,
+                    element: pinEl
+                });
+            });
+        }
+
+        function updateMarkersProjection() {
+            if (!planetGroup || !camera) return;
+
+            const width = window.innerWidth;
+            const height = window.innerHeight;
+            const globeCenter = new THREE.Vector3();
+            planetGroup.getWorldPosition(globeCenter);
+
+            activeMarkerElements.forEach(item => {
+                const worldPos = new THREE.Vector3();
+                item.anchor.getWorldPosition(worldPos);
+
+                const surfaceNormal = worldPos.clone().sub(globeCenter).normalize();
+                const viewVector = camera.position.clone().sub(worldPos).normalize();
+                const facingRatio = surfaceNormal.dot(viewVector);
+
+                if (facingRatio > 0.12) {
+                    const projected = worldPos.clone().project(camera);
+                    const screenX = (projected.x * 0.5 + 0.5) * width;
+                    const screenY = (-(projected.y * 0.5) + 0.5) * height;
+
+                    item.element.style.transform = `translate3d(${screenX}px, ${screenY}px, 0) translate(-50%, -50%)`;
+                    item.element.style.opacity = Math.min(1, (facingRatio - 0.12) * 4).toFixed(2);
+                    item.element.style.pointerEvents = 'auto';
+                } else {
+                    item.element.style.opacity = '0';
+                    item.element.style.pointerEvents = 'none';
+                }
+            });
+        }
+
+        // ==========================================
+        // 7. PLANET SWITCHING
+        // ==========================================
+        function switchPlanet(planetKey) {
+            if (currentPlanetKey === planetKey) return;
+            currentPlanetKey = planetKey;
+
+            const data = PLANET_DATA[planetKey];
+            const btnMars = document.getElementById('btn-mars');
+            const btnMoon = document.getElementById('btn-moon');
+
+            if (planetKey === 'mars') {
+                btnMars.className = 'relative flex items-center gap-2.5 px-4 sm:px-5 py-2 rounded-lg font-display font-semibold text-sm tracking-wide transition-all duration-300 bg-nasa-blue text-white shadow-[0_0_16px_rgba(16,91,216,0.65)] border border-nasa-bright';
+                btnMoon.className = 'relative flex items-center gap-2.5 px-4 sm:px-5 py-2 rounded-lg font-display font-semibold text-sm tracking-wide transition-all duration-300 text-blue-300/75 hover:text-white hover:bg-nasa-blue/25 border border-transparent';
+            } else {
+                btnMoon.className = 'relative flex items-center gap-2.5 px-4 sm:px-5 py-2 rounded-lg font-display font-semibold text-sm tracking-wide transition-all duration-300 bg-nasa-blue text-white shadow-[0_0_16px_rgba(16,91,216,0.65)] border border-nasa-bright';
+                btnMars.className = 'relative flex items-center gap-2.5 px-4 sm:px-5 py-2 rounded-lg font-display font-semibold text-sm tracking-wide transition-all duration-300 text-blue-300/75 hover:text-white hover:bg-nasa-blue/25 border border-transparent';
+            }
+
+            planetMesh.material.map = textures[planetKey];
+            planetMesh.material.needsUpdate = true;
+            planetGroup.rotation.y = data.initialRotationY;
+
+            document.getElementById('hud-planet-name').textContent = data.name;
+            document.getElementById('hud-rover-count').textContent = data.hudSummary;
+
+            rebuildRoverPins(planetKey);
+        }
+
+        // ==========================================
+        // 8. USER INTERACTION
+        // ==========================================
+        function setupInteraction(domElement) {
+            domElement.addEventListener('mousedown', (e) => {
+                isDragging = true;
+                previousMousePosition = { x: e.clientX, y: e.clientY };
+            });
+
+            window.addEventListener('mousemove', (e) => {
+                if (!isDragging) return;
+                const deltaX = e.clientX - previousMousePosition.x;
+                const deltaY = e.clientY - previousMousePosition.y;
+
+                rotationVelocity.y = deltaX * 0.005;
+                rotationVelocity.x = deltaY * 0.005;
+
+                planetGroup.rotation.y += rotationVelocity.y;
+                planetGroup.rotation.x = Math.max(-0.9, Math.min(0.9, planetGroup.rotation.x + rotationVelocity.x));
+
+                previousMousePosition = { x: e.clientX, y: e.clientY };
+            });
+
+            window.addEventListener('mouseup', () => {
+                isDragging = false;
+            });
+
+            domElement.addEventListener('touchstart', (e) => {
+                if (e.touches.length === 1) {
+                    isDragging = true;
+                    previousMousePosition = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+                }
+            }, { passive: true });
+
+            window.addEventListener('touchmove', (e) => {
+                if (!isDragging || e.touches.length !== 1) return;
+                const deltaX = e.touches[0].clientX - previousMousePosition.x;
+                const deltaY = e.touches[0].clientY - previousMousePosition.y;
+
+                rotationVelocity.y = deltaX * 0.006;
+                rotationVelocity.x = deltaY * 0.006;
+
+                planetGroup.rotation.y += rotationVelocity.y;
+                planetGroup.rotation.x = Math.max(-0.9, Math.min(0.9, planetGroup.rotation.x + rotationVelocity.x));
+
+                previousMousePosition = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+            }, { passive: true });
+
+            window.addEventListener('touchend', () => {
+                isDragging = false;
+            });
+        }
+
+        function toggleAutoRotate() {
+            autoRotate = !autoRotate;
+            const statusText = document.getElementById('orbit-status-text');
+            const iconPause = document.getElementById('icon-pause');
+            const iconPlay = document.getElementById('icon-play');
+
+            if (autoRotate) {
+                statusText.textContent = 'ORBIT: ACTIVE';
+                iconPause.classList.remove('hidden');
+                iconPlay.classList.add('hidden');
+            } else {
+                statusText.textContent = 'ORBIT: PAUSED';
+                iconPause.classList.add('hidden');
+                iconPlay.classList.remove('hidden');
+            }
+        }
+
+        function resetCameraView() {
+            planetGroup.rotation.x = 0.22;
+            planetGroup.rotation.y = PLANET_DATA[currentPlanetKey].initialRotationY;
+            rotationVelocity = { x: 0, y: 0 };
+        }
+
+        // ==========================================
+        // 9. MODALS, QUIZZES & CELEBRATORY CONFETTI
+        // ==========================================
+        function openRoverModal(rover, planetName) {
+            activeHardware = rover;
+            activePlanetName = planetName;
+            currentModalTab = 'story';
+
+            const modal = document.getElementById('rover-modal');
+            document.getElementById('modal-planet-badge').textContent = `${planetName} SURFACE NODE • ${rover.status.toUpperCase()}`;
+            document.getElementById('modal-rover-name').textContent = rover.name;
+            document.getElementById('modal-rover-coords').textContent = `LANDING SITE: ${rover.coordsLabel}`;
+
+            updateModalQuizPill();
+            switchModalTab('story');
+
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+        }
+
+        function closeRoverModal() {
+            const modal = document.getElementById('rover-modal');
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+        }
+
+        function updateModalQuizPill() {
+            if (!activeHardware) return;
+            let correctCount = 0;
+            activeHardware.quiz.forEach((q, idx) => {
+                const key = `${activeHardware.id}-${idx}`;
+                if (userQuizAnswers[key] === q.correctIndex) correctCount++;
+            });
+            const pill = document.getElementById('modal-quiz-pill');
+            if (pill) {
+                pill.textContent = `${correctCount}/${activeHardware.quiz.length}`;
+                if (correctCount === activeHardware.quiz.length) {
+                    pill.className = 'px-1.5 py-0.5 text-[10px] rounded bg-emerald-500/20 text-emerald-400 border border-emerald-500/50 font-bold';
+                } else {
+                    pill.className = 'px-1.5 py-0.5 text-[10px] rounded bg-nasa-red/20 text-nasa-red border border-nasa-red/40';
+                }
+            }
+            updateGlobalScoreBadge();
+        }
+
+        function updateGlobalScoreBadge() {
+            let totalQuestions = 0;
+            let totalCorrect = 0;
+            Object.values(PLANET_DATA).forEach(planet => {
+                planet.rovers.forEach(hw => {
+                    hw.quiz.forEach((q, idx) => {
+                        totalQuestions++;
+                        const answer = userQuizAnswers[`${hw.id}-${idx}`];
+                        if (answer === q.correctIndex) totalCorrect++;
+                    });
+                });
+            });
+            const badge = document.getElementById('global-score-badge');
+            if (badge) badge.textContent = `${totalCorrect}/${totalQuestions}`;
+
+            // Celebrate whenever the global correct-answer score crosses 4, 8, 12, etc.
+            const previousMilestone = Math.floor(lastCorrectCountForConfetti / 4);
+            const currentMilestone = Math.floor(totalCorrect / 4);
+            if (currentMilestone > previousMilestone) {
+                triggerCelebratoryConfetti();
+            }
+            // Also track decreases so a milestone can be celebrated again if the user
+            // changes an answer and later earns those four correct answers again.
+            lastCorrectCountForConfetti = totalCorrect;
+        }
+
+        function triggerCelebratoryConfetti() {
+            // A CSS-keyframe implementation is used for broad browser support,
+            // including mobile Safari, and does not depend on the Web Animations API.
+            const existingOverlay = document.getElementById('quiz-confetti-overlay');
+            if (existingOverlay) existingOverlay.remove();
+
+            if (!document.getElementById('quiz-confetti-keyframes')) {
+                const style = document.createElement('style');
+                style.id = 'quiz-confetti-keyframes';
+                style.textContent = `
+                    @keyframes astroQuizConfettiFall {
+                        0% { transform: translate3d(0, -12vh, 0) rotate(0deg); opacity: 1; }
+                        85% { opacity: 1; }
+                        100% { transform: translate3d(var(--drift-x), 115vh, 0) rotate(var(--spin)); opacity: 0; }
+                    }
+                `;
+                document.head.appendChild(style);
+            }
+
+            const overlay = document.createElement('div');
+            overlay.id = 'quiz-confetti-overlay';
+            overlay.setAttribute('aria-hidden', 'true');
+            Object.assign(overlay.style, {
+                position: 'fixed',
+                top: '0', left: '0', right: '0', bottom: '0',
+                width: '100%', height: '100%',
+                overflow: 'hidden',
+                pointerEvents: 'none',
+                zIndex: '2147483647',
+                contain: 'strict'
+            });
+            document.body.appendChild(overlay);
+
+            const colors = ['#FC3D21', '#105BD8', '#3B82F6', '#10B981', '#F59E0B', '#FFFFFF', '#F472B6', '#A78BFA'];
+            const pieceCount = 220;
+            for (let i = 0; i < pieceCount; i++) {
+                const piece = document.createElement('span');
+                const size = 7 + Math.random() * 9;
+                const duration = 2.8 + Math.random() * 2.2;
+                const delay = Math.random() * 0.55;
+                piece.style.position = 'absolute';
+                piece.style.left = `${Math.random() * 100}%`;
+                piece.style.top = '-18px';
+                piece.style.width = `${size}px`;
+                piece.style.height = `${size * (0.6 + Math.random() * 0.8)}px`;
+                piece.style.backgroundColor = colors[Math.floor(Math.random() * colors.length)];
+                piece.style.borderRadius = Math.random() > 0.55 ? '50%' : '2px';
+                piece.style.opacity = '1';
+                piece.style.setProperty('--drift-x', `${(Math.random() - 0.5) * 320}px`);
+                piece.style.setProperty('--spin', `${720 + Math.random() * 1080}deg`);
+                piece.style.animation = `astroQuizConfettiFall ${duration}s ${delay}s ease-in forwards`;
+                overlay.appendChild(piece);
+            }
+
+            window.setTimeout(() => {
+                if (overlay.isConnected) overlay.remove();
+            }, 6000);
+        }
+
+        function switchModalTab(tabName) {
+            currentModalTab = tabName;
+            const tabs = ['story', 'timeline', 'quiz', 'citations'];
+            tabs.forEach(t => {
+                const btn = document.getElementById(`tab-btn-${t}`);
+                if (!btn) return;
+                if (t === tabName) {
+                    btn.className = 'px-3.5 py-2 rounded-lg font-mono text-xs font-bold tracking-wide bg-nasa-blue text-white border border-nasa-bright transition-all flex items-center gap-2';
+                } else {
+                    btn.className = 'px-3.5 py-2 rounded-lg font-mono text-xs font-bold tracking-wide text-blue-300 hover:text-white hover:bg-nasa-blue/30 border border-transparent transition-all flex items-center gap-2';
+                }
+            });
+
+            renderModalBody();
+        }
+
+        function renderModalBody() {
+            if (!activeHardware) return;
+            const body = document.getElementById('modal-body-content');
+
+            if (currentModalTab === 'story') {
+                const statsHtml = activeHardware.stats.map(s => `
+                    <div class="p-3 rounded-xl bg-nasa-blue/15 border border-nasa-blue/50">
+                        <div class="font-mono text-[10px] uppercase tracking-wider text-blue-400">${s.label}</div>
+                        <div class="font-display text-xs sm:text-sm font-bold text-white mt-0.5">${s.value}</div>
+                    </div>
+                `).join('');
+
+                const paragraphsHtml = activeHardware.storyParagraphs.map(p => `
+                    <p class="text-sm text-blue-100/90 leading-relaxed">${p}</p>
+                `).join('');
+
+                body.innerHTML = `
+                    <figure class="rounded-xl overflow-hidden border border-nasa-bright/50 bg-black">
+                        <img 
+                            src="${activeHardware.imageUrl}" 
+                            alt="${activeHardware.name} NASA Photograph"
+                            class="block w-full h-auto object-cover"
+                            onerror="this.onerror=null; this.src='https://placehold.co/800x400/0B3D91/FFFFFF?text=NASA+Official+Mission+Archive';"
+                        />
+                        <figcaption class="px-3.5 py-2.5 bg-[#061024] border-t border-nasa-blue/40 text-xs text-blue-300 font-mono">
+                            ${activeHardware.imageCaption}
+                        </figcaption>
+                    </figure>
+
+                    <div class="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+                        ${statsHtml}
+                    </div>
+
+                    <div class="space-y-3 p-4 rounded-xl bg-[#061024]/90 border border-nasa-blue/40">
+                        <div class="flex items-center justify-between">
+                            <h3 class="font-display text-base font-bold text-white">Mission Story &amp; Scientific Legacy</h3>
+                            <span class="font-mono text-[10px] px-2 py-0.5 rounded bg-nasa-blue/40 text-blue-200 border border-nasa-bright/40">
+                                NASA VERIFIED
+                            </span>
+                        </div>
+                        ${paragraphsHtml}
+                    </div>
+
+                    <div class="flex flex-wrap items-center justify-between gap-3 pt-1">
+                        <button onclick="switchModalTab('timeline')" class="px-4 py-2 rounded-xl bg-nasa-blue/30 hover:bg-nasa-blue/60 border border-nasa-bright/50 text-xs font-mono font-bold text-blue-100 transition-colors">
+                            VIEW MISSION TIMELINE &rarr;
+                        </button>
+                        <button onclick="switchModalTab('quiz')" class="px-4 py-2 rounded-xl bg-nasa-red/90 hover:bg-nasa-red text-xs font-mono font-bold text-white shadow-[0_0_15px_rgba(252,61,33,0.45)] transition-colors">
+                            TAKE ${activeHardware.name.toUpperCase()} QUIZ &rarr;
+                        </button>
+                    </div>
+                `;
+            } else if (currentModalTab === 'timeline') {
+                const timelineHtml = activeHardware.timeline.map((item, idx) => `
+                    <div class="relative pl-6 pb-5 ${idx === activeHardware.timeline.length - 1 ? '' : 'border-l-2 border-nasa-bright/50'}">
+                        <span class="absolute -left-[7px] top-1 w-3 h-3 rounded-full bg-nasa-red border-2 border-white shadow-[0_0_10px_#FC3D21]"></span>
+                        <div class="font-mono text-xs font-bold text-nasa-bright">${item.date}</div>
+                        <h4 class="font-display text-base font-bold text-white mt-0.5">${item.title}</h4>
+                        <p class="text-xs sm:text-sm text-blue-200/85 mt-1">${item.desc}</p>
+                    </div>
+                `).join('');
+
+                body.innerHTML = `
+                    <div class="p-4 rounded-xl bg-[#061024]/90 border border-nasa-blue/50">
+                        <h3 class="font-display text-lg font-bold text-white mb-4">
+                            Mission Timeline: ${activeHardware.name}
+                        </h3>
+                        <div class="ml-2">
+                            ${timelineHtml}
+                        </div>
+                    </div>
+                `;
+            } else if (currentModalTab === 'quiz') {
+                const quizHtml = activeHardware.quiz.map((q, qIdx) => {
+                    const answerKey = `${activeHardware.id}-${qIdx}`;
+                    const selectedIdx = userQuizAnswers[answerKey];
+                    const hasAnswered = selectedIdx !== undefined;
+
+                    const optionsHtml = q.options.map((opt, optIdx) => {
+                        let btnClasses = 'w-full text-left p-3 rounded-xl border text-xs sm:text-sm transition-all flex items-start gap-3 ';
+                        if (!hasAnswered) {
+                            btnClasses += 'bg-[#07132B] hover:bg-nasa-blue/40 border-nasa-blue/60 text-blue-100';
+                        } else if (optIdx === q.correctIndex) {
+                            btnClasses += 'bg-emerald-950/80 border-emerald-400 text-emerald-100 font-medium';
+                        } else if (optIdx === selectedIdx && optIdx !== q.correctIndex) {
+                            btnClasses += 'bg-red-950/80 border-nasa-red text-red-100';
+                        } else {
+                            btnClasses += 'bg-[#050C1C] border-nasa-blue/30 text-blue-300/50';
+                        }
+
+                        const letter = String.fromCharCode(65 + optIdx);
+                        return `
+                            <button onclick="selectQuizOption(${qIdx}, ${optIdx})" class="${btnClasses}">
+                                <span class="font-mono text-xs font-bold px-2 py-0.5 rounded bg-nasa-blue/40 border border-nasa-bright/40 shrink-0">${letter}</span>
+                                <span>${opt}</span>
+                            </button>
+                        `;
+                    }).join('');
+
+                    const feedbackHtml = hasAnswered ? `
+                        <div class="mt-3 p-3 rounded-xl ${selectedIdx === q.correctIndex ? 'bg-emerald-950/50 border border-emerald-500/40 text-emerald-200' : 'bg-nasa-blue/25 border border-nasa-bright/50 text-blue-200'} text-xs">
+                            <span class="font-mono font-bold uppercase mr-1.5">
+                                ${selectedIdx === q.correctIndex ? '✓ CORRECT:' : '✕ NASA FACT CHECK:'}
+                            </span>
+                            ${q.explanation}
+                        </div>
+                    ` : '';
+
+                    return `
+                        <div class="p-4 rounded-xl bg-[#061024]/95 border border-nasa-blue/50 space-y-2.5">
+                            <div class="font-mono text-[11px] text-nasa-bright font-bold">QUESTION ${qIdx + 1} OF ${activeHardware.quiz.length}</div>
+                            <h4 class="font-display text-sm sm:text-base font-bold text-white">${q.question}</h4>
+                            <div class="space-y-2 pt-1">
+                                ${optionsHtml}
+                            </div>
+                            ${feedbackHtml}
+                        </div>
+                    `;
+                }).join('');
+
+                body.innerHTML = `
+                    <div class="flex items-center justify-between p-3.5 rounded-xl bg-nasa-blue/20 border border-nasa-bright/50">
+                        <div>
+                            <div class="font-display text-sm font-bold text-white">AstroQuiz Challenge: ${activeHardware.name}</div>
+                            <div class="text-xs text-blue-300">Select an answer below to test your NASA mission knowledge.</div>
+                        </div>
+                        <button onclick="resetHardwareQuiz()" class="px-3 py-1.5 rounded-lg bg-nasa-blue/40 hover:bg-nasa-blue text-[11px] font-mono text-blue-100 border border-nasa-bright/40">
+                            RESET QUIZ
+                        </button>
+                    </div>
+                    <div class="space-y-4">
+                        ${quizHtml}
+                    </div>
+                `;
+            } else if (currentModalTab === 'citations') {
+                const relevantCitations = NASA_CITATIONS.filter(c => activeHardware.citations.includes(c.id));
+                const citationsHtml = relevantCitations.map(c => `
+                    <div class="p-4 rounded-xl bg-[#061024] border border-nasa-blue/60 space-y-1.5">
+                        <div class="flex items-center justify-between">
+                            <span class="font-mono text-[11px] font-bold px-2 py-0.5 rounded bg-nasa-blue/40 text-blue-200 border border-nasa-bright/40">${c.id} • ${c.agency}</span>
+                        </div>
+                        <div class="font-display text-sm font-bold text-white pt-1">${c.title}</div>
+                        <a href="${c.url}" target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-1.5 font-mono text-xs text-nasa-bright hover:text-blue-300 underline break-all">
+                            <span>${c.url}</span>
+                            <svg class="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path>
+                            </svg>
+                        </a>
+                    </div>
+                `).join('');
+
+                body.innerHTML = `
+                    <div class="space-y-3">
+                        <p class="text-xs text-blue-300 font-mono">
+                            All dates, information, and images are sourced from NASA:
+                        </p>
+                        ${citationsHtml}
+                    </div>
+                `;
+            }
+        }
+
+        function selectQuizOption(qIdx, optIdx) {
+            if (!activeHardware) return;
+            const key = `${activeHardware.id}-${qIdx}`;
+            userQuizAnswers[key] = optIdx;
+            updateModalQuizPill();
+            renderModalBody();
+        }
+
+        function resetHardwareQuiz() {
+            if (!activeHardware) return;
+            activeHardware.quiz.forEach((_, idx) => {
+                delete userQuizAnswers[`${activeHardware.id}-${idx}`];
+            });
+            updateModalQuizPill();
+            renderModalBody();
+        }
+
+        // ==========================================
+        // 10. TIMELINE MODAL
+        // ==========================================
+        function openGlobalOverviewModal(tab) {
+            const modal = document.getElementById('global-modal');
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+            renderGlobalOverviewContent(tab);
+        }
+
+        function closeGlobalOverviewModal() {
+            const modal = document.getElementById('global-modal');
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+        }
+
+        function renderGlobalOverviewContent(tab) {
+            const btnTimeline = document.getElementById('global-tab-timeline');
+            const btnCitations = document.getElementById('global-tab-citations');
+            const body = document.getElementById('global-modal-body');
+
+            if (tab === 'timeline') {
+                btnTimeline.className = 'px-3.5 py-1.5 rounded-lg font-mono text-xs font-bold bg-nasa-blue text-white border border-nasa-bright';
+                btnCitations.className = 'px-3.5 py-1.5 rounded-lg font-mono text-xs font-bold text-blue-300 hover:text-white hover:bg-nasa-blue/30';
+
+                const masterEvents = [
+                    {
+                        year: '1967',
+                        date: 'April 17 – May 4, 1967',
+                        body: 'MOON • OCEANUS PROCELLARUM',
+                        title: 'Surveyor 3 Lunar Lander',
+                        desc: 'Launched April 17 and soft-landed after two bounces on April 20. Its TV camera and surface sampler helped test the lunar soil; it transmitted 6,326 pictures before last contact on May 4, 1967.',
+                        planetKey: 'moon',
+                        hwId: 'surveyor-3'
+                    },
+                    {
+                        year: '1969',
+                        date: 'July 16 – July 21, 1969',
+                        body: 'MOON • MARE TRANQUILLITATIS',
+                        title: 'Apollo 11 Lunar Module "Eagle" Descent Stage',
+                        desc: 'Launched July 16 (13:32 UTC) and landed July 20 (20:17:40 UTC). Neil Armstrong and Buzz Aldrin walked ~250 m on the Moon, deployed EASEP instruments, and collected 21.55 kg of lunar samples. Eagle\'s descent stage remains at Tranquility Base.',
+                        planetKey: 'moon',
+                        hwId: 'apollo-11-eagle'
+                    },
+                    {
+                        year: '1971',
+                        date: 'July 30 – August 1971',
+                        body: 'MOON • HADLEY-APENNINE / HADLEY RILLE',
+                        title: 'Lunar Roving Vehicle',
+                        desc: 'David R. Scott and James B. Irwin used the first crewed lunar rover during three surface EVAs, traveling 27.9 km and collecting 77.32 kg of lunar samples. The rover was left near Hadley Rille.',
+                        planetKey: 'moon',
+                        hwId: 'apollo-lunar-rover'
+                    },
+                    {
+                        year: '1996–1997',
+                        date: 'Dec. 4, 1996 – Sept. 27, 1997',
+                        body: 'MARS • ARES VALLIS',
+                        title: 'Mars Pathfinder Lander & Sojourner Rover',
+                        desc: 'Launched from Cape Canaveral on Dec. 4, 1996 UTC and bounced onto Ares Vallis on July 4, 1997 inside 19-ft airbags (~15 bounces, up to 50 ft high). The 23-lb Sojourner rover stood up on July 5 and helped return 2.3 billion bits of data (16,500 lander & 550 rover images).',
+                        planetKey: 'mars',
+                        hwId: 'pathfinder'
+                    },
+                    {
+                        year: '2004–2010',
+                        date: 'Jan. 3, 2004 – March 22, 2010',
+                        body: 'MARS • GUSEV CRATER',
+                        title: 'Mars Exploration Rover — Spirit (MER-A)',
+                        desc: 'Landed at Gusev Crater to search for mineral clues of past water. Operated 6+ years, traveled 4.8 miles, climbed 30° slopes, and returned 124,838 raw images.',
+                        planetKey: 'mars',
+                        hwId: 'spirit'
+                    },
+                    {
+                        year: '2004–2018',
+                        date: 'Jan. 24, 2004 – June 2018',
+                        body: 'MARS • MERIDIANI PLANUM',
+                        title: 'Mars Exploration Rover — Opportunity (MER-B)',
+                        desc: 'Landed on the opposite side of Mars at Meridiani Planum. Operated 14+ years, traveled 28+ miles, climbed 32° slopes, and returned 217,594 raw images.',
+                        planetKey: 'mars',
+                        hwId: 'opportunity'
+                    }
+                ];
+
+                body.innerHTML = masterEvents.map(ev => `
+                    <div class="p-4 rounded-xl bg-[#061024] border border-nasa-blue/60 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                        <div class="space-y-1">
+                            <div class="flex flex-wrap items-center gap-2">
+                                <span class="px-2 py-0.5 rounded bg-nasa-red/20 border border-nasa-red/50 font-mono text-[11px] font-bold text-nasa-red">${ev.date}</span>
+                                <span class="font-mono text-[11px] text-blue-400">${ev.body}</span>
+                            </div>
+                            <h3 class="font-display text-base font-bold text-white">${ev.title}</h3>
+                            <p class="text-xs sm:text-sm text-blue-200/85">${ev.desc}</p>
+                        </div>
+                        <button 
+                            onclick="jumpToHardware('${ev.planetKey}', '${ev.hwId}')"
+                            class="shrink-0 px-3.5 py-2 rounded-lg bg-nasa-blue hover:bg-nasa-bright text-xs font-mono font-bold text-white border border-nasa-bright/60 transition-colors"
+                        >
+                            INSPECT &amp; QUIZ &rarr;
+                        </button>
+                    </div>
+                `).join('');
+            } else {
+                btnCitations.className = 'px-3.5 py-1.5 rounded-lg font-mono text-xs font-bold bg-nasa-blue text-white border border-nasa-bright';
+                btnTimeline.className = 'px-3.5 py-1.5 rounded-lg font-mono text-xs font-bold text-blue-300 hover:text-white hover:bg-nasa-blue/30';
+
+                const allCitesHtml = NASA_CITATIONS.map(c => `
+                    <div class="p-3.5 rounded-xl bg-[#061024] border border-nasa-blue/50">
+                        <div class="font-mono text-[10px] font-bold text-nasa-bright">${c.id} • ${c.agency}</div>
+                        <div class="font-display text-sm font-bold text-white mt-0.5">${c.title}</div>
+                        <a href="${c.url}" target="_blank" rel="noopener noreferrer" class="font-mono text-xs text-blue-300 hover:text-white underline break-all mt-1 inline-block">
+                            ${c.url}
+                        </a>
+                    </div>
+                `).join('');
+
+                body.innerHTML = `
+                    <div class="p-4 rounded-xl bg-nasa-blue/20 border border-nasa-bright/60 flex items-center justify-between">
+                        <div>
+                            <div class="font-display text-base font-bold text-white">Team Astral Express — Official NASA Bibliography</div>
+                            <div class="text-xs text-blue-200/80">100% of mission specifications, timelines, imagery, and quiz facts are verified via NASA.</div>
+                        </div>
+                    </div>
+                    <div class="space-y-2.5">
+                        ${allCitesHtml}
+                    </div>
+                `;
+            }
+        }
+
+        function jumpToHardware(planetKey, hwId) {
+            closeGlobalOverviewModal();
+            switchPlanet(planetKey);
+            const targetHw = PLANET_DATA[planetKey].rovers.find(r => r.id === hwId);
+            if (targetHw) {
+                openRoverModal(targetHw, PLANET_DATA[planetKey].name);
+            }
+        }
+
+        window.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                closeRoverModal();
+                closeGlobalOverviewModal();
+            }
+        });
+
+        // ==========================================
+        // 11. ANIMATION LOOP
+        // ==========================================
+        function onWindowResize() {
+            if (!camera || !renderer) return;
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.position.z = getOptimalCameraDistance();
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+
+            if (!isDragging) {
+                if (autoRotate) {
+                    planetGroup.rotation.y += 0.0028;
+                } else {
+                    planetGroup.rotation.y += rotationVelocity.y;
+                    rotationVelocity.y *= 0.94;
+                }
+            }
+
+            if (orbitalRing1) orbitalRing1.rotation.z += 0.0008;
+            if (orbitalRing2) orbitalRing2.rotation.z -= 0.0005;
+            if (starField) starField.rotation.y -= 0.0002;
+
+            updateMarkersProjection();
+
+            renderer.render(scene, camera);
+        }
+
+        function initSkyEffects() {
+            const sky = document.getElementById('sky-effects');
+            if (!sky) return;
+
+            // Small fixed stars twinkle independently across the background.
+            const starCount = 115;
+            for (let i = 0; i < starCount; i++) {
+                const star = document.createElement('span');
+                star.className = 'twinkle-star';
+                const size = (Math.random() * 2.1 + 0.7).toFixed(2);
+                star.style.left = (Math.random() * 100).toFixed(2) + '%';
+                star.style.top = (Math.random() * 100).toFixed(2) + '%';
+                star.style.setProperty('--star-size', size + 'px');
+                star.style.setProperty('--twinkle-duration', (1.8 + Math.random() * 3.8).toFixed(2) + 's');
+                star.style.setProperty('--twinkle-delay', (-Math.random() * 5).toFixed(2) + 's');
+                sky.appendChild(star);
+            }
+
+            // Send a shooting star across the sky every few seconds.
+            const reducedMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+            if (reducedMotion) return;
+
+            function launchShootingStar() {
+                const meteor = document.createElement('span');
+                meteor.className = 'shooting-star';
+                meteor.style.left = (62 + Math.random() * 48).toFixed(1) + '%';
+                meteor.style.top = (Math.random() * 58).toFixed(1) + '%';
+                meteor.style.animationDuration = (1.05 + Math.random() * 0.65).toFixed(2) + 's';
+                sky.appendChild(meteor);
+                meteor.addEventListener('animationend', () => meteor.remove(), { once: true });
+            }
+
+            window.setTimeout(function repeatShootingStars() {
+                launchShootingStar();
+                window.setTimeout(repeatShootingStars, 2800 + Math.random() * 4200);
+            }, 1200);
+        }
+
+        window.onload = function () {
+            initThreeJS();
+            initSkyEffects();
+            animate();
+        };
+    </script>
+</body>
+</html>
